@@ -17,12 +17,27 @@ airport you are at.
 - **Biomes from the GPS position**: a Koppen-Geiger climate map (Beck et al. 2018, `licenses/Beck-KG-NOTICE.txt`)
   gives the climate at the aircraft; it picks the plant mix and how the seasons look (table below).
 - **Placement**: ported from XPGrass 1.0.4 (Tor Jakobsen, MIT, `licenses/XPGrass-LICENSE.txt`): apt.dat
-  runways/pavements/boundaries plus the airport pack's draped `.pol` polygons and `.lin` roads/paths are rasterised
-  into a pavement mask; clumps are placed on a grid around the aircraft, probed onto the terrain and created as
-  `XPLMInstance`s (auto-shift on X-Plane 12.1+), within a 1.5 ms per-frame budget.
+  runways/pavements/boundaries plus scenery pavement, roads and occupied footprints are rasterised into a mask.
+  The reader walks enabled scenery packs in priority order, applies rectangular/polygonal exclusions and airport-ID
+  filters, and stops at the first base mesh for each tile. It reads uncompressed and 7z DSFs, including global scenery.
+  Native road networks use `.net` widths (including asymmetric and virtual road types); curved roads are flattened.
+  `.agb`/`.ags` autogen areas and `.fac` facades are excluded; `.obj` vertices and `.agp` tile/annotation bounds provide
+  conservative object keep-outs. Clumps are placed on a grid, probed onto the terrain and created as `XPLMInstance`s
+  (auto-shift on X-Plane 12.1+), within the existing per-frame placement budget.
+- **Full-footprint clearance**: every generated grass vertex, across all variants and LODs, contributes to a bounding
+  radius. Placement, edge snapping and retries check every mask cell in a square enclosing that radius. Narrow
+  pavement edges are rasterised even when they fall between cell centres. `pavement_margin_m` is now extra clearance
+  beyond the grass footprint, so existing settings leave a wider verge. Autogen areas are excluded conservatively,
+  including gardens; object bounds are independent of heading and may leave larger gaps than the visible footprint.
+  This controls placement, not rendering layers: grass remains ordinary depth-tested geometry on the terrain.
 - **Streaming ortho (XEarthLayer, AutoOrtho, ...)**: all file work runs on a background thread; scenery packs on a
   FUSE / FSKit / WinFsp / Dokan / network mount are never read; terrain probe misses while tiles stream in are
-  retried, and `SCENERY_LOADED` only re-tries empty cells instead of removing the grass.
+  retried, and `SCENERY_LOADED` only re-tries empty cells instead of removing the grass. Mask coverage cannot include
+  scenery available only on skipped mounts. An unreadable/corrupt local DSF withholds grass on that tile and logs the
+  reason. Unresolved object art uses a logged 10 m radius; unknown roads use a logged 20 m corridor. These fallbacks
+  cannot guarantee clearance for larger custom assets. Road/object bounds include all matching library variants
+  conservatively; pavement classification still uses the first resolved variant. Animated object transforms are not
+  evaluated. Reload the plugin after changing scenery packs.
 - **OpenStreetMap roads** (`use_osm_roads = true`, menu: Keep grass off OpenStreetMap roads): roads, car parks and
   rail lines from OpenStreetMap around each airport are added to the pavement mask, so grass stays off roads the
   scenery does not describe (ortho, base mesh). Roads take their `width` / `lanes` tags or a width for their class;
@@ -78,7 +93,9 @@ zoal-grass/
   licenses/
 ```
 
-Settings: Plugins > zoal-grass, or `zoal-grass/zoal-grass.ini` (written on first start). Commands:
+Settings: Plugins > zoal-grass, or `zoal-grass/zoal-grass.ini` (written on first start). The existing
+`use_dsf_polygons = true` setting controls the expanded scenery mask (menu: Keep grass off scenery roads and buildings).
+Commands:
 `zoal-grass/toggle`, `zoal-grass/reload`. Log lines start with `zoal-grass:` in `Log.txt`. Generated objects go to
 `zoal-grass/cache/` and are rebuilt when look settings change.
 
@@ -91,6 +108,10 @@ cmake --build build --config Release       # -> build/<platform>/zoal-grass.xpl
 ctest --test-dir build -C Release          # X-Plane-free core tests
 cmake --build build --target install_xplane -- # macOS dev loop: -DXPLANE_ROOT=... (default /Users/dzou/X-Plane 12)
 ```
+
+The public-domain 7-Zip C decoder is vendored at a pinned revision in `third_party/7zip/` (see
+`licenses/7zip-NOTICE.txt`); no external 7z executable is required. Core tests include synthetic scenery stacks,
+compressed DSFs, road curves, exclusions, sub-cell pavement and generated mesh footprint checks.
 
 CI (`.github/workflows/ci.yml`) builds and tests on macOS (universal), Windows (MSVC, static runtime) and Linux.
 Pushing a `v*` tag runs `release.yml`, which packages all three into `zoal-grass-<version>.zip` and publishes it.

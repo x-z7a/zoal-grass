@@ -43,7 +43,7 @@ struct Airport {
     std::vector<Helipad> helipads;
     std::vector<Pavement> pavements;
     std::vector<std::vector<Ring>> boundaries;
-    std::vector<Pavement> draped;   // from the scenery pack's DSF (not apt.dat)
+    std::vector<Pavement> draped;   // hard ground / occupied footprints from active scenery and OSM
     std::vector<std::pair<LatLon, LatLon>> sealanes;
 
     void for_each_point(const std::function<void(const LatLon&)>& fn) const;

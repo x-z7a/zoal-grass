@@ -1,0 +1,5 @@
+7-Zip C decoder subset, version 26.06
+Copyright (c) Igor Pavlov and contributors.
+These files are placed in the public domain by their authors; see file headers.
+Source: https://github.com/ip7z/7zip/tree/d3296e39e1f1f92c7b41c0c3848e65640428d42d/C
+Only the C decoder and its headers are included, unmodified.

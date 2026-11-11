@@ -50,6 +50,25 @@ static std::string read_text(const std::string& path) {
     return ss.str();
 }
 
+// The clearance must enclose the actual emitted geometry, including top cards, leaning blades and far LODs.
+static void check_footprint(const BuiltObjects& built) {
+    CHECK(built.clearance_m > 0);
+    for (const auto* paths : {&built.normal, &built.mowed}) {
+        for (const auto& path : *paths) {
+            std::istringstream in(read_text(path));
+            std::string line;
+            double farthest = 0;
+            while (std::getline(in, line)) {
+                if (line.rfind("VT ", 0) != 0) continue;
+                std::istringstream row(line.substr(3));
+                double x, y, z;
+                if (row >> x >> y >> z) farthest = std::max(farthest, std::hypot(x, z));
+            }
+            CHECK(farthest > 0 && farthest < built.clearance_m);
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 3) {
         std::fprintf(stderr, "usage: core_test <resources dir> <scratch dir>\n");
@@ -154,6 +173,7 @@ int main(int argc, char** argv) {
         std::string dir = scratch + "/objs_" + st.name + "_" + kBiomes[biome].name;
         CHECK(assets.build(resources, dir, p, out, [](const std::string& m) { std::printf("  %s\n", m.c_str()); }));
         CHECK(out.normal.size() == 4 && out.mowed.size() == 4);
+        check_footprint(out);
         CHECK(out.tris[0] > 0 && out.tris[1] == 0 && out.tris[2] == 0 && out.tris[3] == 0);
         CHECK(out.tris[0] < 1800);                    // one level for every clump: keep it cheap
         std::printf("%-12s %-13s triangles per level %d/%d/%d/%d, %d plant cards\n", st.name, kBiomes[biome].name,
@@ -180,10 +200,23 @@ int main(int argc, char** argv) {
         BuiltObjects out;
         CHECK(assets.build(resources, scratch + "/objs_blades", p, out, [](const std::string&) {}));
         CHECK(out.tris[0] > out.tris[1] && out.tris[1] > out.tris[2] && out.tris[2] > out.tris[3] && out.tris[0] < 40000);
+        check_footprint(out);
         std::string obj = read_text(out.normal[0]);
         CHECK(obj.find("ATTR_LOD 0 16") != std::string::npos && obj.find("ATTR_LOD 16 40") != std::string::npos);
         std::printf("real blades  temperate     triangles per level %d/%d/%d/%d\n", out.tris[0], out.tris[1], out.tris[2],
                     out.tris[3]);
+    }
+
+    {   // width/height and distant LODs can exceed the nominal grid footprint significantly
+        LookParams p;
+        p.real_blades = true;
+        p.width_scale = 3;
+        p.height_m = 1;
+        p.footprint_m = 2;
+        BuiltObjects wide;
+        CHECK(assets.build(resources, scratch + "/objs_wide", p, wide, [](const std::string&) {}));
+        check_footprint(wide);
+        CHECK(wide.clearance_m > p.footprint_m);
     }
 
     // ---- seasons
