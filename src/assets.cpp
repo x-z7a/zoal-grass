@@ -16,7 +16,7 @@ namespace zg {
 namespace {
 
 const char* kNormal = "zg_atlas_NRM.png";
-const char* kBuildVersion = "species-6";  // part of the object file names: bump when the geometry code changes
+const char* kBuildVersion = "species-7";  // part of the object file names: bump when the geometry code changes
 constexpr double kPi2 = 6.283185307179586;
 constexpr double kUpBias = 0.45;          // blade normals lean up this much (soft lighting, no glowing flat cards)
 constexpr double kCardUpBias = 0.78;      // card normals: lit almost like the ground they stand on
@@ -110,6 +110,7 @@ bool GrassAssets::load(const std::string& resources_dir, const Log& log) {
     for (int k = 0; k < int(cards_.size()); ++k) {
         const std::string& n = cards_[size_t(k)].name;
         auto starts = [&](const char* p) { return n.rfind(p, 0) == 0; };
+        if (starts("lawn_top_")) continue;                  // paired with its side view below
         if (n == "lawn_dry") lawn_dry_.push_back(k);
         else if (starts("lawn_")) lawn_.push_back(k);
         else if (starts("meadow")) meadow_.push_back(k);
@@ -123,6 +124,13 @@ bool GrassAssets::load(const std::string& resources_dir, const Log& log) {
         else if (starts("rosette")) rosette_.push_back(k);
     }
     if (lawn_dry_.empty()) lawn_dry_ = lawn_;
+    lawn_top_.assign(cards_.size(), -1);                    // lawn_<colour> -> lawn_top_<colour>
+    for (int k = 0; k < int(cards_.size()); ++k) {
+        const std::string& n = cards_[size_t(k)].name;
+        if (n.rfind("lawn_", 0) != 0 || n.rfind("lawn_top_", 0) == 0) continue;
+        for (int t = 0; t < int(cards_.size()); ++t)
+            if (cards_[size_t(t)].top && cards_[size_t(t)].name == "lawn_top_" + n.substr(5)) lawn_top_[size_t(k)] = t;
+    }
     char buf[200];
     std::snprintf(buf, sizeof buf, "grass art: %zu blade colours, %zu plant cards (%zu lawn)", blades_.size(),
                   cards_.size(), lawn_.size());
@@ -351,9 +359,17 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                     int nl = int(n * share[L]);
                     for (int k = 0; k < nl; ++k) {
                         const LC& c = lcs[size_t(k)];
-                        side_card(L, pts[size_t(k)].first, pts[size_t(k)].second, c.yaw, c.sw * grow[L],
-                                  c.sh * (L == 3 ? 1.1 : 1.0), c.ld, c.lean, cards_[size_t(c.card)], L < 3 ? 2 : 1,
-                                  c.mirror);   // crossed: they cover the ground seen from above too
+                        const Card& sc = cards_[size_t(c.card)];
+                        double x = pts[size_t(k)].first, z = pts[size_t(k)].second;
+                        side_card(L, x, z, c.yaw, c.sw * grow[L], c.sh * (L == 3 ? 1.1 : 1.0), c.ld, c.lean, sc,
+                                  L < 3 ? 2 : 1, c.mirror);
+                        // ground cover: the same clump seen from above, lying just over the ground under it. Upright
+                        // cards vanish edge-on from above; this keeps the field full from high and overhead views. Any
+                        // higher and it reads as floating pads from the ground. One-sided, 2 triangles.
+                        int ti = lawn_top_[size_t(c.card)];
+                        if (ti >= 0)
+                            top_card(L, x, z, c.yaw + 0.7, c.sw * grow[L] * 0.95, 0.02 + 0.004 * (k % 3),
+                                     cards_[size_t(ti)]);
                     }
                 }
             }
