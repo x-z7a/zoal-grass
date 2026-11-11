@@ -29,6 +29,15 @@ airport you are at.
 - **Streaming ortho (XEarthLayer, AutoOrtho, ...)**: all file work runs on a background thread; scenery packs on a
   FUSE / FSKit / WinFsp / Dokan / network mount are never read; terrain probe misses while tiles stream in are
   retried, and `SCENERY_LOADED` only re-tries empty cells instead of removing the grass.
+- **OpenStreetMap roads** (`use_osm_roads = true`, menu: Keep grass off OpenStreetMap roads): roads, car parks and
+  rail lines from OpenStreetMap around each airport are added to the pavement mask, so grass stays off roads the
+  scenery does not describe (ortho, base mesh). Roads take their `width` / `lanes` tags or a width for their class;
+  footways count unless tagged unpaved, tracks and paths only when tagged paved; tunnels are ignored. The data is
+  downloaded once per airport from an Overpass API server (`osm_overpass_url`, default overpass-api.de; only the
+  airport's bounding box is sent) on its own thread and kept in `zoal-grass/osm_cache/` for `osm_cache_days` (30).
+  The first visit places the grass at once without them and rebuilds that airport's grass when they arrive (public
+  Overpass servers can take a minute); without a network the grass is simply placed without them. Untick the menu
+  item or set `use_osm_roads = false` to switch it off. Map data (c) OpenStreetMap contributors, ODbL.
 
 ## Seasons and styles
 

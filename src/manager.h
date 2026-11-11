@@ -56,10 +56,13 @@ private:
         std::atomic<bool> done{false};
         std::unique_ptr<PavementMask> mask;
         std::string message;
+        bool osm_missing = false;            // OSM roads wanted but not cached yet: download them, then rebuild
+        double osm_box[4] = {0, 0, 0, 0};    // s, w, n, e
     };
     struct AirportState {
         AirportEntry entry;
         std::shared_ptr<MaskJob> job;
+        std::shared_ptr<std::atomic<int>> osm;   // OSM download: 0 running, 1 cached (rebuild the mask), -1 failed
         std::unique_ptr<PavementMask> mask;
         std::unordered_map<int64_t, Cell> cells;
         std::unordered_set<int64_t> live;
@@ -99,6 +102,7 @@ private:
     std::string plugin_dir_, xp_root_, cache_dir_, resources_dir_;
     Settings settings_;
     Worker worker_;
+    Worker net_worker_;   // OpenStreetMap downloads (slow; must not hold up the masks)
     GrassAssets assets_;
     bool ready_ = false;
     bool objects_dirty_ = true;

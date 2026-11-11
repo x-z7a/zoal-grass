@@ -1,5 +1,6 @@
 // X-Plane-free checks of the plugin core, run by CI on every platform:
 //  - an apt.dat record parses, and its pavement mask keeps grass off the runway but not off the grass beside it
+//  - OpenStreetMap roads and car parks keep grass off; grass tracks and tunnels do not
 //  - the airport index finds the airport from a tiny scenery layout
 //  - the grass objects build for every style and biome, are well-formed OBJ8 files and stay in the triangle budget
 //  - the season mapping follows the hemisphere and the climate
@@ -16,7 +17,9 @@
 #include "geo.h"
 #include "assets.h"
 #include "biome.h"
+#include "http.h"
 #include "mask.h"
+#include "osm.h"
 #include "platform.h"
 #include "style.h"
 #include "wind.h"
@@ -80,6 +83,40 @@ int main(int argc, char** argv) {
             CHECK(!mask->grass_ok(apron.x, apron.y));
             CHECK(!mask->grass_ok(edge.x, edge.y));
         }
+
+        // OpenStreetMap: a road, a car park, a grass track and a road in a tunnel west of the runway
+        auto lon_at = [](double metres_west) { return 8.0 - metres_west / 75800.0; };
+        auto way = [&](const char* tags, std::vector<std::pair<double, double>> pts) {
+            std::string w = "<way id=\"1\">";
+            for (auto& q : pts) w += "<nd ref=\"1\" lat=\"" + std::to_string(q.first) + "\" lon=\"" + std::to_string(q.second) + "\"/>";
+            return w + tags + "</way>\n";
+        };
+        std::string xml = "<?xml version=\"1.0\"?><osm version=\"0.6\">\n" +
+            way("<tag k=\"highway\" v=\"residential\"/>", {{47.001, lon_at(120)}, {47.008, lon_at(120)}}) +
+            way("<tag k=\"highway\" v=\"track\"/><tag k=\"surface\" v=\"grass\"/>", {{47.001, lon_at(60)}, {47.008, lon_at(60)}}) +
+            way("<tag k=\"highway\" v=\"primary\"/><tag k=\"tunnel\" v=\"yes\"/>", {{47.001, lon_at(90)}, {47.008, lon_at(90)}}) +
+            way("<tag k=\"amenity\" v=\"parking\"/>", {{47.004, lon_at(165)}, {47.004, lon_at(185)}, {47.005, lon_at(185)},
+                                                            {47.005, lon_at(165)}, {47.004, lon_at(165)}}) +
+            "</osm>\n";
+        OsmStats os;
+        Airport with_osm = *ap;
+        with_osm.draped = osm_hard_ground(xml, &os);
+        CHECK(os.ways == 4 && os.bands == 1 && os.areas == 1 && os.skipped == 2);
+        auto m2 = build_mask(with_osm, ms);
+        CHECK(m2 != nullptr);
+        if (m2) {
+            auto ok = [&](double lat, double west) {
+                XY q = m2->proj.to_xy(lat, lon_at(west));
+                return m2->grass_ok(q.x, q.y);
+            };
+            CHECK(!ok(47.0045, 120));      // on the road
+            CHECK(!ok(47.0045, 175));      // in the car park
+            CHECK(ok(47.0045, 60));        // the grass track keeps its grass
+            CHECK(ok(47.0045, 90));        // the tunnel is underground
+            CHECK(ok(47.0045, 145));       // between road and car park
+        }
+        CHECK(overpass_query(47, 8, 47.01, 8.01).find("(47.000,8.000,47.010,8.010)") != std::string::npos);
+        CHECK(url_encode("a b&c=d") == "a+b%26c%3Dd");
     }
 
     // ---- the airport index over a tiny X-Plane folder

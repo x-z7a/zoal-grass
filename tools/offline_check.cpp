@@ -7,10 +7,11 @@
 #include "biome.h"
 #include "dsf.h"
 #include "mask.h"
+#include "osm.h"
 #include "style.h"
 using namespace zg;
 int main(int argc, char** argv) {
-    if (argc < 5) { std::printf("usage: offline <xp_root> <ident> <out_dir> <resources>\n"); return 2; }
+    if (argc < 5) { std::printf("usage: offline <xp_root> <ident> <out_dir> <resources> [osm]\n"); return 2; }
     auto log = [](const std::string& m) { std::printf("  log: %s\n", m.c_str()); };
     auto t0 = std::chrono::steady_clock::now();
     AirportIndex idx;
@@ -28,6 +29,27 @@ int main(int argc, char** argv) {
     ap->draped = gp.collect(*ap, *e, 450);
     s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     std::printf("draped: %zu (%.2f s)\n", ap->draped.size(), s);
+    if (argc > 5 && std::string(argv[5]) == "osm") {   // OpenStreetMap roads (network: sends the airport's box only)
+        double bs = 90, bw = 180, bn = -90, be = -180;
+        ap->for_each_point([&](const LatLon& q) {
+            bs = std::min(bs, q.lat); bn = std::max(bn, q.lat); bw = std::min(bw, q.lon); be = std::max(be, q.lon);
+        });
+        LocalProjection pj((bs + bn) / 2, (bw + be) / 2);
+        double dlat = 233.5 / pj.ky, dlon = 233.5 / pj.kx;
+        t0 = std::chrono::steady_clock::now();
+        OsmFetch of = osm_fetch("https://overpass-api.de/api/interpreter", std::string(argv[3]) + "/osm_cache", e->ident,
+                                bs - dlat, bw - dlon, bn + dlat, be + dlon, 30, true);
+        s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        if (of.ok) {
+            OsmStats os;
+            auto hard = osm_hard_ground(of.xml, &os);
+            std::printf("osm: %s in %.2f s, %zu bytes: %d ways, %d roads/paths/rail, %d areas, %d ignored\n",
+                        of.cached ? "cache" : "download", s, of.xml.size(), os.ways, os.bands, os.areas, os.skipped);
+            ap->draped.insert(ap->draped.end(), hard.begin(), hard.end());
+        } else {
+            std::printf("osm: failed: %s\n", of.error.c_str());
+        }
+    }
     MaskSettings ms; ms.cell_m = 1.0; ms.margin_m = 3.5; ms.open_pad_m = 203.5;
     t0 = std::chrono::steady_clock::now();
     auto m = build_mask(*ap, ms);

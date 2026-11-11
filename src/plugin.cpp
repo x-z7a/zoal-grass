@@ -49,6 +49,7 @@ namespace
         kNormal,
         kBlades,
         kWind,
+        kOsm,
         kReload,
         kSave,
         kStatus,
@@ -124,6 +125,8 @@ namespace
                 on = s.real_blades;
             else if (id == kWind)
                 on = s.wind_sway;
+            else if (id == kOsm)
+                on = s.use_osm_roads;
             else
                 continue;
             XPLMCheckMenuItem(it.menu, it.index, on ? xplm_Menu_Checked : xplm_Menu_Unchecked);
@@ -200,6 +203,9 @@ namespace
             case kWind:
                 s.wind_sway = !s.wind_sway;
                 break;
+            case kOsm:
+                s.use_osm_roads = !s.use_osm_roads;
+                break;
             case kReload:
                 reload_settings();
                 sync_menu();
@@ -258,6 +264,7 @@ namespace
         add_item(g_menu, "Grass on gravel", kGravel);
         add_item(g_menu, "Grass on turf runways", kTurf);
         add_item(g_menu, "Keep grass off scenery pavement polygons", kDsf);
+        add_item(g_menu, "Keep grass off OpenStreetMap roads (online)", kOsm);
         add_item(g_menu, "Grass outside the airport boundary", kOutside);
         XPLMAppendMenuSeparator(g_menu);
         add_item(g_menu, "Grass sways in the wind (experimental)", kWind);
