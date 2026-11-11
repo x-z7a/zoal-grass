@@ -33,6 +33,7 @@ struct Settings {
     double width_scale = 1.0;          // extra horizontal tuft scale
     double lod_near_m = 40.0;          // real_blades only: 3D blades closer than this
     double lod_mid_m = 140.0;          // real_blades only: full plant cards closer than this, fewer beyond
+    bool terrain_tilt = true;          // stand each clump on the terrain slope (ground cover stays just above ground)
     bool real_blades = false;          // 3D blades close up (more triangles; the grass changes look near the camera)
     bool optimize_for_gpu = false;     // single-sided ATTR_no_cull meshes instead of two-sided instanced ones
     bool cast_shadows = false;

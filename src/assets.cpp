@@ -16,7 +16,7 @@ namespace zg {
 namespace {
 
 const char* kNormal = "zg_atlas_NRM.png";
-const char* kBuildVersion = "species-7";  // part of the object file names: bump when the geometry code changes
+const char* kBuildVersion = "species-8";  // part of the object file names: bump when the geometry code changes
 constexpr double kPi2 = 6.283185307179586;
 constexpr double kUpBias = 0.45;          // blade normals lean up this much (soft lighting, no glowing flat cards)
 constexpr double kCardUpBias = 0.78;      // card normals: lit almost like the ground they stand on
@@ -349,7 +349,8 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                                              : dom[size_t(U(rng) * double(dom.size())) % dom.size()];
                     double s = hs * (0.8 + 0.4 * U(rng));
                     lcs.push_back({U(rng) * kPi2, s * p.width_scale * (0.75 + 0.5 * U(rng)), s, U(rng) * kPi2,
-                                   (U(rng) - 0.5) * 0.25, ci, U(rng) < 0.5});
+                                   0.18 + 0.24 * U(rng), ci, U(rng) < 0.5});   // tufts lean 10-23 degrees: seen
+                                                                               // from above they show grass, not edges
                 }
                 // the same clumps from 0 to lod_mid: zooming in must not change which plants grow
                 const double share[kLods] = {1.0, 1.0, 1.0, 0.35};
@@ -363,12 +364,13 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                         double x = pts[size_t(k)].first, z = pts[size_t(k)].second;
                         side_card(L, x, z, c.yaw, c.sw * grow[L], c.sh * (L == 3 ? 1.1 : 1.0), c.ld, c.lean, sc,
                                   L < 3 ? 2 : 1, c.mirror);
-                        // ground cover: the same clump seen from above, lying just over the ground under it. Upright
+                        // ground cover: the same clump seen from above, lying 1.5 cm over the ground under it (the
+                        // clump is sunk sink_m into the terrain and stood on its slope by the manager). Upright
                         // cards vanish edge-on from above; this keeps the field full from high and overhead views. Any
                         // higher and it reads as floating pads from the ground. One-sided, 2 triangles.
                         int ti = lawn_top_[size_t(c.card)];
                         if (ti >= 0)
-                            top_card(L, x, z, c.yaw + 0.7, c.sw * grow[L] * 0.95, 0.02 + 0.004 * (k % 3),
+                            top_card(L, x, z, c.yaw + 0.7, c.sw * grow[L] * 1.25, p.sink_m + 0.015 + 0.004 * (k % 3),
                                      cards_[size_t(ti)]);
                     }
                 }

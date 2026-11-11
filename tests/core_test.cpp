@@ -12,6 +12,7 @@
 #include <string>
 
 #include "apt.h"
+#include "geo.h"
 #include "assets.h"
 #include "biome.h"
 #include "mask.h"
@@ -147,6 +148,20 @@ int main(int argc, char** argv) {
         CHECK(obj.find("ATTR_LOD 0 16") != std::string::npos && obj.find("ATTR_LOD 16 40") != std::string::npos);
         std::printf("real blades  temperate     triangles per level %d/%d/%d/%d\n", out.tris[0], out.tris[1], out.tris[2],
                     out.tris[3]);
+    }
+
+    // ---- standing a clump on the terrain slope: the angles rebuild the terrain normal for every heading
+    for (double hd : {0.0, 90.0, 180.0, 270.0, 37.0}) {
+        const double ns[][3] = {{0.0, 1.0, 0.0}, {0.1, 0.99, 0.0}, {0.0, 0.98, -0.2}, {-0.15, 0.97, 0.18}};
+        for (auto& n0 : ns) {
+            double m = std::sqrt(n0[0] * n0[0] + n0[1] * n0[1] + n0[2] * n0[2]);
+            double nx = n0[0] / m, ny = n0[1] / m, nz = n0[2] / m, pd, rd;
+            terrain_tilt(nx, ny, nz, hd, pd, rd);
+            double p = pd * 3.14159265358979 / 180, r = rd * 3.14159265358979 / 180, h = hd * 3.14159265358979 / 180;
+            double ux = std::sin(r), uy = std::cos(r) * std::cos(p), uz = std::cos(r) * std::sin(p);   // heading frame
+            double wx = ux * std::cos(h) - uz * std::sin(h), wz = ux * std::sin(h) + uz * std::cos(h);  // Ry(-heading)
+            CHECK(std::fabs(wx - nx) < 1e-6 && std::fabs(uy - ny) < 1e-6 && std::fabs(wz - nz) < 1e-6);
+        }
     }
 
     // ---- seasons

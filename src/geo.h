@@ -157,4 +157,22 @@ inline std::vector<LatLon> flatten_nodes(const std::vector<BezNode>& nodes, bool
     return dedup;
 }
 
+// Pitch and roll (degrees) that stand an object with the given heading upright on terrain with unit normal
+// (nx, ny, nz) in local OpenGL coordinates. X-Plane orients an object as Ry(-heading) Rx(pitch) Rz(-roll), so its up
+// axis becomes (sin roll, cos roll cos pitch, cos roll sin pitch) in the heading frame.
+inline void terrain_tilt(double nx, double ny, double nz, double heading_deg, double& pitch_deg, double& roll_deg) {
+    double h = heading_deg * 3.14159265358979 / 180.0;
+    double hx = nx * std::cos(h) + nz * std::sin(h), hz = -nx * std::sin(h) + nz * std::cos(h);
+    double m = std::sqrt(hx * hx + ny * ny + hz * hz);
+    if (m < 1e-9 || ny <= 0) {
+        pitch_deg = roll_deg = 0;
+        return;
+    }
+    hx /= m;
+    double hy = ny / m;
+    hz /= m;
+    roll_deg = std::asin(std::fmax(-1.0, std::fmin(1.0, hx))) * 180.0 / 3.14159265358979;
+    pitch_deg = std::atan2(hz, hy) * 180.0 / 3.14159265358979;
+}
+
 }  // namespace zg
