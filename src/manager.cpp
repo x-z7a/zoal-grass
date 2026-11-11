@@ -55,16 +55,16 @@ void row_span(double cx, double cy, int j, double s, double radius, int& first, 
     last = int(std::floor((cx + half) / s - 0.5));
 }
 
-bool snap(const PavementMask& mask, double px, double py, double spacing, double& ox, double& oy) {
+bool snap(const PavementMask& mask, double px, double py, double spacing, double clearance, double& ox, double& oy) {
     for (double ring : kSnapRings) {
         double reach = ring * spacing;
         for (int k = 0; k < 8; ++k) {
             double dx = std::cos(k * kPi / 4), dy = std::sin(k * kPi / 4);
-            if (mask.grass_ok(px + dx * reach, py + dy * reach)) {
+            if (mask.footprint_ok(px + dx * reach, py + dy * reach, clearance)) {
                 double lo = 0, hi = reach;
                 for (int n = 0; n < 4; ++n) {
                     double mid = (lo + hi) / 2;
-                    if (mask.grass_ok(px + dx * mid, py + dy * mid)) hi = mid;
+                    if (mask.footprint_ok(px + dx * mid, py + dy * mid, clearance)) hi = mid;
                     else lo = mid;
                 }
                 ox = px + dx * hi;
@@ -588,8 +588,8 @@ void GrassManager::scan(AirportState& st, double ax, double ay) {
                 double x = cx + (hash01(i, j, 1) - 0.5) * kJitter * s;
                 double y = cy + (hash01(i, j, 2) - 0.5) * kJitter * s;
                 double ox, oy;
-                bool ok = mask.grass_ok(x, y);
-                if (!ok && snap(mask, x, y, s, ox, oy)) { x = ox; y = oy; ok = true; }
+                bool ok = mask.footprint_ok(x, y, built_.clearance_m);
+                if (!ok && snap(mask, x, y, s, built_.clearance_m, ox, oy)) { x = ox; y = oy; ok = true; }
                 if (ok) {
                     double rx = cx - ax, ry = cy - ay;
                     found.push_back({std::hypot(rx, ry) - bias * (rx * st.hx + ry * st.hy), i, j, x, y});
@@ -659,6 +659,7 @@ bool GrassManager::ground_altitude(AirportState& st, double lat, double lon, dou
 }
 
 GrassManager::Made GrassManager::create(AirportState& st, int i, int j, double px, double py, double ref_y, double min_ny, Cell& out) {
+    if (!st.mask->footprint_ok(px, py, built_.clearance_m)) return Made::Rejected;
     LatLon ll = st.mask->proj.to_latlon(px, py);
     if (!st.alt_ok) st.alt_known = ground_altitude(st, ll.lat, ll.lon, ref_y);
     double x, y, z;
