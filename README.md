@@ -11,6 +11,12 @@ airport you are at.
   `.for` forest.
 - **Seen from above**: each lawn clump has a flat ground-cover card under it, the same clump rendered from above, so
   the field stays full of grass from high and overhead views where upright cards are edge-on (2 triangles each).
+- **Wind** (experimental, off by default: `wind_sway = true`, menu: Grass sways in the wind): within `lod_near_m`
+  (40 m) the plant cards tilt in 0.75 m groups about their foot, driven by the sim's wind
+  (`sim/weather/aircraft/wind_now_*`): a lean downwind of up to `wind_sway_deg` (7) in a strong wind plus gusts that
+  run across the field. X-Plane objects cannot bend, so each group tilts as a whole; the flat ground cover stays put.
+  The clumps near the camera are updated every frame (instance datarefs `zoal/grass/sway_x0..3`, `sway_z0..3`);
+  beyond 40 m the same geometry is drawn still. Watch your FPS with it on.
 - **Plants** (modelled in Blender, see [Art](#art)): lawn clumps in four colours (side and top views), meadow grass with feathery panicles,
   timothy and wild awned seed-head grass, green and dry bunch-grass tussocks, moss cushions, sedge, clover and
   dandelion / plantain rosettes. They grow in drifts, and every clump variant leans to one lawn colour, so fields look patchy, not tiled.

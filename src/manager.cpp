@@ -1,6 +1,8 @@
 #include "manager.h"
 #include "style.h"
+#include "wind.h"
 
+#include <XPLMCamera.h>
 #include <XPLMGraphics.h>
 #include <XPLMPlugin.h>
 #include <XPLMUtilities.h>
@@ -86,6 +88,7 @@ GrassManager::GrassManager(std::string plugin_dir, std::string xp_root, Settings
 GrassManager::~GrassManager() {
     drop_all();
     unload_objects();
+    for (XPLMDataRef r : sway_refs_) XPLMUnregisterDataAccessor(r);
     if (probe_) XPLMDestroyProbe(probe_);
     probe_ = nullptr;
 }
@@ -113,6 +116,19 @@ void GrassManager::setup() {
     fps_ref_ = XPLMFindDataRef("sim/time/framerate_period");
     day_ref_ = XPLMFindDataRef("sim/time/local_date_days");          // the sim's date, not the computer's
     snow_ref_ = XPLMFindDataRef("sim/weather/region/snow_cover");
+    wind_x_ref_ = XPLMFindDataRef("sim/weather/aircraft/wind_now_x_msc");
+    wind_z_ref_ = XPLMFindDataRef("sim/weather/aircraft/wind_now_z_msc");
+    if (!wind_x_ref_ || !wind_z_ref_) {   // before X-Plane 12
+        wind_x_ref_ = XPLMFindDataRef("sim/weather/wind_now_x_msc");
+        wind_z_ref_ = XPLMFindDataRef("sim/weather/wind_now_z_msc");
+    }
+    // the animated objects' datarefs must exist before an object using them loads; their values come per instance
+    if (sway_refs_.empty())
+        for (int k = 0; kSwayDatarefs[k]; ++k)
+            sway_refs_.push_back(XPLMRegisterDataAccessor(kSwayDatarefs[k], xplmType_Float, 0, nullptr, nullptr,
+                                                          [](void*) -> float { return 0.0f; }, nullptr, nullptr, nullptr,
+                                                          nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                                          nullptr));
     if (!probe_) probe_ = XPLMCreateProbe(xplm_ProbeY);
     autoshift_ = reinterpret_cast<void (*)(XPLMInstanceRef)>(XPLMFindSymbol("XPLMInstanceSetAutoShift"));
     if (!climate_.load(resources_dir_ + "/climate_kg.bin")) log("climate map missing: plants chosen by latitude only");
@@ -174,6 +190,8 @@ bool GrassManager::rebuild_objects() {
     p.lod_far = std::max(p.lod_mid + 50.0, settings_.radius_m + settings_.hysteresis_m + 150.0);
     p.gpu = settings_.optimize_for_gpu;
     p.real_blades = settings_.real_blades;
+    p.sway = settings_.wind_sway;
+    sway_objects_ = p.sway && !p.real_blades;
     p.sink_m = kSinkM;
     p.shadows = settings_.cast_shadows;
     p.normal_map = settings_.normal_map;
@@ -355,6 +373,10 @@ float GrassManager::tick(float /*since_last*/) {
     double ms = (now() - t0) * 1000.0;
     tick_ms_ += (ms - tick_ms_) * 0.05;
     tick_max_ = std::max(tick_max_ * 0.995, ms);
+    if (sway_objects_ && !airports_.empty()) {
+        sway(t0);
+        busy = true;                 // every frame while the grass moves
+    }
     interval = busy ? -1.0f : (airports_.empty() ? 1.0f : 0.25f);
     return interval;
 }
@@ -608,8 +630,8 @@ GrassManager::Made GrassManager::create(AirportState& st, int i, int j, double p
     bool mowed = st.mask->is_mowed(px, py) && !mowed_objs_.empty();
     const auto& pool = mowed ? mowed_objs_ : normal_objs_;
     XPLMObjectRef obj = pool[std::min(pool.size() - 1, size_t(hash01(i, j, 3) * double(pool.size())))];
-    const char* drefs[] = {nullptr};
-    XPLMInstanceRef inst = XPLMCreateInstance(obj, drefs);
+    const char* none[] = {nullptr};
+    XPLMInstanceRef inst = XPLMCreateInstance(obj, sway_objects_ ? const_cast<const char**>(kSwayDatarefs) : none);
     if (!inst) return Made::Rejected;
     XPLMDrawInfo_t d;
     d.structSize = sizeof(d);
@@ -621,14 +643,19 @@ GrassManager::Made GrassManager::create(AirportState& st, int i, int j, double p
     d.pitch = float(pitch);
     d.heading = heading;
     d.roll = float(roll);
-    float dummy = 0;
-    XPLMInstanceSetPosition(inst, &d, &dummy);
+    float zeros[2 * kSwayGroups] = {0};
+    XPLMInstanceSetPosition(inst, &d, zeros);
     if (autoshift_) autoshift_(inst);
     out.inst = inst;
     out.heading = heading;
     out.pitch = d.pitch;
     out.roll = d.roll;
-    if (!autoshift_) XPLMLocalToWorld(d.x, d.y, d.z, &out.lat, &out.lon, &out.alt);
+    out.x = d.x;
+    out.y = d.y;
+    out.z = d.z;
+    out.seed = float(hash01(i, j, 5));
+    out.swaying = false;
+    XPLMLocalToWorld(d.x, d.y, d.z, &out.lat, &out.lon, &out.alt);   // to follow a moving local origin
     ++count_;
     ++created_;
     return Made::Placed;
@@ -637,21 +664,47 @@ GrassManager::Made GrassManager::create(AirportState& st, int i, int j, double p
 void GrassManager::follow_origin() {
     if (!latr_ref_ || !lonr_ref_) return;
     float la = XPLMGetDataf(latr_ref_), lo = XPLMGetDataf(lonr_ref_);
-    if (origin_known_ && (la != origin_lat_ || lo != origin_lon_) && !autoshift_) {
+    if (origin_known_ && (la != origin_lat_ || lo != origin_lon_)) {
         for (auto& kv : airports_)
             for (auto& c : kv.second->cells) {
                 if (!c.second.inst) continue;
                 double x, y, z;
                 XPLMWorldToLocal(c.second.lat, c.second.lon, c.second.alt, &x, &y, &z);
+                c.second.x = float(x);
+                c.second.y = float(y);
+                c.second.z = float(z);
+                if (autoshift_) continue;   // X-Plane moved the instance itself
                 XPLMDrawInfo_t d{sizeof(XPLMDrawInfo_t), float(x), float(y), float(z), c.second.pitch, c.second.heading,
                                  c.second.roll};
-                float dummy = 0;
-                XPLMInstanceSetPosition(c.second.inst, &d, &dummy);
+                float zeros[2 * kSwayGroups] = {0};
+                XPLMInstanceSetPosition(c.second.inst, &d, zeros);
+                c.second.swaying = false;
             }
     }
     origin_known_ = true;
     origin_lat_ = la;
     origin_lon_ = lo;
+}
+
+void GrassManager::sway(double t) {
+    float wx = wind_x_ref_ ? XPLMGetDataf(wind_x_ref_) : 0.0f, wz = wind_z_ref_ ? XPLMGetDataf(wind_z_ref_) : 0.0f;
+    XPLMCameraPosition_t cam;
+    XPLMReadCameraPosition(&cam);
+    const double reach = settings_.lod_near_m + 2.0 * settings_.spacing_m, reach2 = reach * reach;
+    float v[2 * kSwayGroups];
+    for (auto& kv : airports_)
+        for (auto& c : kv.second->cells) {
+            Cell& cl = c.second;
+            if (!cl.inst) continue;
+            double dx = cl.x - cam.x, dy = cl.y - cam.y, dz = cl.z - cam.z;
+            bool close = dx * dx + dy * dy + dz * dz < reach2;
+            if (!close && !cl.swaying) continue;
+            if (close) sway_values(wx, wz, t, cl.x, cl.z, cl.heading, settings_.wind_sway_deg, cl.seed, v);
+            else std::fill(v, v + 2 * kSwayGroups, 0.0f);   // out of reach: upright again, then left alone
+            XPLMDrawInfo_t d{sizeof(XPLMDrawInfo_t), cl.x, cl.y, cl.z, cl.pitch, cl.heading, cl.roll};
+            XPLMInstanceSetPosition(cl.inst, &d, v);
+            cl.swaying = close;
+        }
 }
 
 std::string GrassManager::resolve_look(double lat, double lon, int& biome, int& koppen, bool keep_climate) const {

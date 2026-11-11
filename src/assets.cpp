@@ -1,6 +1,7 @@
 #include "assets.h"
 
 #include "platform.h"
+#include "wind.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,11 +17,12 @@ namespace zg {
 namespace {
 
 const char* kNormal = "zg_atlas_NRM.png";
-const char* kBuildVersion = "species-8";  // part of the object file names: bump when the geometry code changes
+const char* kBuildVersion = "species-9";  // part of the object file names: bump when the geometry code changes
 constexpr double kPi2 = 6.283185307179586;
 constexpr double kUpBias = 0.45;          // blade normals lean up this much (soft lighting, no glowing flat cards)
 constexpr double kCardUpBias = 0.78;      // card normals: lit almost like the ground they stand on
-constexpr double kDetailShare = 0.4;      // curved blades end at this share of lod_near
+constexpr double kDetailShare = 0.4;
+constexpr double kSwayCellM = 0.75;       // wind: cards whose middle falls in one such cell tilt together      // curved blades end at this share of lod_near
 constexpr double kBladeTuftsPerM2 = 27.0; // tufts of real blades per m2 at 25 cm grass
 constexpr int kMaxBladeTufts = 900;
 constexpr double kLawnCardsPerM2 = 4.0;   // Blender lawn clumps per m2 (crossed pairs) at 25 cm grass
@@ -49,11 +51,13 @@ struct MeshOut {
     std::string vt;
     int nverts = 0;
     std::vector<int> idx[kLods];
+    std::vector<float> pos;   // x, y, z per vertex (to sort triangles into sway cells)
     char line[160];
 
     int vert(double x, double y, double z, float nx, float ny, float nz, double u, double v) {
         std::snprintf(line, sizeof line, "VT %.4f %.4f %.4f %.3f %.3f %.3f %.5f %.5f\n", x, y, z, nx, ny, nz, u, v);
         vt += line;
+        pos.insert(pos.end(), {float(x), float(y), float(z)});
         return nverts++;
     }
     // An upright card: base corners (x0,z0)-(x1,z1), top shifted by (lx,lz); horizontal normal (nx,nz) tilted up.
@@ -160,7 +164,7 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
     unsigned stamp = unsigned(std::hash<std::string>()(
         std::string(kBuildVersion) + std::to_string(p.height_m) + std::to_string(p.density) + std::to_string(p.dry_mix) + std::to_string(p.width_scale) +
         std::to_string(p.footprint_m) + std::to_string(p.lod_near) + std::to_string(p.lod_mid) + std::to_string(p.lod_far) +
-        texture + mixkey + (p.gpu ? "g" : "c") +
+        texture + mixkey + (p.gpu ? "g" : "c") + (p.sway && !p.real_blades ? "w" : "") +
         (p.shadows ? "s" : "n") + (normal_map ? "m" : "x"))) & 0xffffff;
 
     const Strip* green_blade = &blades_[0];
@@ -425,8 +429,35 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                 }
             }
 
+            // wind: the near level becomes the still ground cover plus one animated group per sway cell; the far
+            // level keeps every triangle still (same geometry, so nothing changes at the switch)
+            const bool sway = p.sway && !rb;
+            const int ncell = std::max(1, int(std::ceil(F / kSwayCellM)));
+            std::vector<int> still;
+            std::vector<std::vector<int>> cells(sway ? size_t(ncell * ncell) : 0);
+            if (sway) {
+                const std::vector<int>& t = m.idx[0];
+                for (size_t q = 0; q + 2 < t.size(); q += 3) {
+                    float cx = 0, cz = 0, ymax = -1;
+                    for (int c = 0; c < 3; ++c) {
+                        const float* v = &m.pos[size_t(t[q + size_t(c)]) * 3];
+                        cx += v[0] / 3;
+                        cz += v[2] / 3;
+                        ymax = std::max(ymax, v[1]);
+                    }
+                    if (ymax < 0.08f) {               // flat ground cover and rosettes stay put
+                        still.insert(still.end(), {t[q], t[q + 1], t[q + 2]});
+                        continue;
+                    }
+                    int ci = std::clamp(int((cx + F / 2) / kSwayCellM), 0, ncell - 1);
+                    int cj = std::clamp(int((cz + F / 2) / kSwayCellM), 0, ncell - 1);
+                    auto& cell = cells[size_t(cj * ncell + ci)];
+                    cell.insert(cell.end(), {t[q], t[q + 1], t[q + 2]});
+                }
+            }
             size_t total = 0;
             for (auto& v : m.idx) total += v.size();
+            if (sway) total += m.idx[0].size();   // the near level is written twice: animated, then still (far)
             char name[96];
             std::snprintf(name, sizeof name, "zg_%06x_%s_%d.obj", stamp, kind, var + 1);
             std::string path = out_dir + "/" + name;
@@ -444,6 +475,10 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
             f << m.vt << "\n";
             std::vector<int> all;
             all.reserve(total);
+            if (sway) {
+                all.insert(all.end(), still.begin(), still.end());
+                for (auto& c : cells) all.insert(all.end(), c.begin(), c.end());
+            }
             for (auto& v : m.idx) all.insert(all.end(), v.begin(), v.end());
             size_t k = 0;
             for (; k + 10 <= all.size(); k += 10) {
@@ -454,8 +489,34 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
             for (; k < all.size(); ++k) f << "IDX " << all[k] << '\n';
             f << '\n';
             size_t offset = 0;
+            if (sway) {
+                f << "ATTR_LOD 0 " << int(p.lod_near) << '\n';
+                if (p.gpu) f << "ATTR_no_cull\n";
+                if (!still.empty()) f << "TRIS " << offset << ' ' << still.size() << '\n';
+                offset += still.size();
+                for (int c = 0; c < ncell * ncell; ++c) {
+                    const auto& cell = cells[size_t(c)];
+                    if (cell.empty()) continue;
+                    int ci = c % ncell, cj = c / ncell, g = (ci * 7 + cj * 13 + var) % kSwayGroups;
+                    double px = -F / 2 + (ci + 0.5) * kSwayCellM, pz = -F / 2 + (cj + 0.5) * kSwayCellM;
+                    const char* rx = kSwayDatarefs[g];                // rotation about Z (degrees)
+                    const char* rz = kSwayDatarefs[kSwayGroups + g];  // rotation about X
+                    char a[400];
+                    std::snprintf(a, sizeof a,
+                                  "ANIM_begin\nANIM_trans %.3f 0 %.3f %.3f 0 %.3f 0 0 %s\n"
+                                  "ANIM_rotate 0 0 1 -45 45 -45 45 %s\nANIM_rotate 1 0 0 -45 45 -45 45 %s\n"
+                                  "ANIM_trans %.3f 0 %.3f %.3f 0 %.3f 0 0 %s\n",
+                                  px, pz, px, pz, rx, rx, rz, -px, -pz, -px, -pz, rx);
+                    f << a << "TRIS " << offset << ' ' << cell.size() << "\nANIM_end\n";
+                    offset += cell.size();
+                }
+                f << "ATTR_LOD " << int(p.lod_near) << ' ' << int(p.lod_far) << '\n';
+                if (p.gpu) f << "ATTR_no_cull\n";
+                f << "TRIS " << offset << ' ' << m.idx[0].size() << '\n';
+                offset += m.idx[0].size();
+            }
             for (int L = 0; L < kLods; ++L) {
-                if (!used(L)) continue;
+                if (!used(L) || sway) continue;
                 f << "ATTR_LOD " << int(lod_lo[L]) << ' ' << int(lod_hi[L]) << '\n';
                 if (p.gpu) f << "ATTR_no_cull\n";
                 if (!m.idx[L].empty()) f << "TRIS " << offset << ' ' << m.idx[L].size() << '\n';

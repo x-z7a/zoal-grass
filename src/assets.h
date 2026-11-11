@@ -31,6 +31,7 @@ struct LookParams {
     SpeciesMix mix;
     double sink_m = 0.03;       // the clumps are sunk this far into the terrain (manager.cpp kSinkM)
     bool real_blades = false;   // the DINKIssTyle-coloured 3D blades close up (else Blender clumps at every distance)
+    bool sway = false;          // wind: within lod_near the cards tilt in groups, driven by the wind.h datarefs
     bool gpu = false;
     bool shadows = false;
     bool normal_map = true;

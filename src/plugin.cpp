@@ -48,6 +48,7 @@ namespace
         kShadows,
         kNormal,
         kBlades,
+        kWind,
         kReload,
         kSave,
         kStatus,
@@ -121,6 +122,8 @@ namespace
                 on = s.normal_map;
             else if (id == kBlades)
                 on = s.real_blades;
+            else if (id == kWind)
+                on = s.wind_sway;
             else
                 continue;
             XPLMCheckMenuItem(it.menu, it.index, on ? xplm_Menu_Checked : xplm_Menu_Unchecked);
@@ -194,6 +197,9 @@ namespace
             case kBlades:
                 s.real_blades = !s.real_blades;
                 break;
+            case kWind:
+                s.wind_sway = !s.wind_sway;
+                break;
             case kReload:
                 reload_settings();
                 sync_menu();
@@ -254,6 +260,7 @@ namespace
         add_item(g_menu, "Keep grass off scenery pavement polygons", kDsf);
         add_item(g_menu, "Grass outside the airport boundary", kOutside);
         XPLMAppendMenuSeparator(g_menu);
+        add_item(g_menu, "Grass sways in the wind (experimental)", kWind);
         add_item(g_menu, "Real 3D blades close up", kBlades);
         add_item(g_menu, "Optimize for GPU (single-sided)", kGpu);
         add_item(g_menu, "Grass casts shadows", kShadows);
