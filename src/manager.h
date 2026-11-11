@@ -43,7 +43,7 @@ private:
     struct Cell {
         XPLMInstanceRef inst = nullptr;      // nullptr: no grass here
         double lat = 0, lon = 0, alt = 0;
-        float heading = 0;
+        float heading = 0, pitch = 0, roll = 0;   // pitch / roll: stood on the terrain slope
     };
     struct Pending {
         int i, j;

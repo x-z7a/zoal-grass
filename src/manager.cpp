@@ -179,6 +179,7 @@ bool GrassManager::rebuild_objects() {
     p.lod_far = std::max(p.lod_mid + 50.0, settings_.radius_m + settings_.hysteresis_m + 150.0);
     p.gpu = settings_.optimize_for_gpu;
     p.real_blades = settings_.real_blades;
+    p.sink_m = kSinkM;
     p.shadows = settings_.cast_shadows;
     p.normal_map = settings_.normal_map;
     BuiltObjects built;
@@ -687,14 +688,18 @@ GrassManager::Made GrassManager::create(AirportState& st, int i, int j, double p
     d.x = info.locationX;
     d.y = info.locationY - float(kSinkM);
     d.z = info.locationZ;
-    d.pitch = 0;
+    double pitch = 0, roll = 0;
+    if (settings_.terrain_tilt) terrain_tilt(info.normalX, info.normalY, info.normalZ, heading, pitch, roll);
+    d.pitch = float(pitch);
     d.heading = heading;
-    d.roll = 0;
+    d.roll = float(roll);
     float dummy = 0;
     XPLMInstanceSetPosition(inst, &d, &dummy);
     if (autoshift_) autoshift_(inst);
     out.inst = inst;
     out.heading = heading;
+    out.pitch = d.pitch;
+    out.roll = d.roll;
     if (!autoshift_) XPLMLocalToWorld(d.x, d.y, d.z, &out.lat, &out.lon, &out.alt);
     ++count_;
     ++created_;
@@ -710,7 +715,8 @@ void GrassManager::follow_origin() {
                 if (!c.second.inst) continue;
                 double x, y, z;
                 XPLMWorldToLocal(c.second.lat, c.second.lon, c.second.alt, &x, &y, &z);
-                XPLMDrawInfo_t d{sizeof(XPLMDrawInfo_t), float(x), float(y), float(z), 0, c.second.heading, 0};
+                XPLMDrawInfo_t d{sizeof(XPLMDrawInfo_t), float(x), float(y), float(z), c.second.pitch, c.second.heading,
+                                 c.second.roll};
                 float dummy = 0;
                 XPLMInstanceSetPosition(c.second.inst, &d, &dummy);
             }

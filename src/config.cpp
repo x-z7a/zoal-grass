@@ -70,6 +70,7 @@ const Field kFields[] = {
     F_NUM(width_scale, "extra horizontal tuft scale (0.5 .. 2.0)"),
     F_NUM(lod_near_m, "real_blades only: 3D blades within this camera distance, metres"),
     F_NUM(lod_mid_m, "real_blades only: full plant cards within this camera distance, fewer beyond"),
+    F_BOOL(terrain_tilt, "tilt each grass clump to the terrain slope, so its ground cover stays just above the ground"),
     F_BOOL(real_blades, "add the DINKIssTyle-coloured 3D blades close up (more triangles; else the same Blender grass at every distance)"),
     F_BOOL(optimize_for_gpu, "false: two-sided meshes that X-Plane hardware-instances (CPU friendly); true: ATTR_no_cull meshes with half the triangles"),
     F_BOOL(cast_shadows, "let the grass cast shadows (costly)"),
@@ -186,7 +187,7 @@ bool look_changed(const Settings& a, const Settings& b) {
 }
 
 bool layout_changed(const Settings& a, const Settings& b) {
-    return a.spacing_m != b.spacing_m || a.max_slope_deg != b.max_slope_deg || b.radius_m < a.radius_m;
+    return a.terrain_tilt != b.terrain_tilt || a.spacing_m != b.spacing_m || a.max_slope_deg != b.max_slope_deg || b.radius_m < a.radius_m;
 }
 
 }  // namespace zg

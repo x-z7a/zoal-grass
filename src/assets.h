@@ -29,6 +29,7 @@ struct LookParams {
     double lod_near = 60, lod_mid = 160, lod_far = 300;   // detailed blades end at 40 % of lod_near
     std::string texture = "zg_atlas_summer.png";   // file in resources/textures
     SpeciesMix mix;
+    double sink_m = 0.03;       // the clumps are sunk this far into the terrain (manager.cpp kSinkM)
     bool real_blades = false;   // the DINKIssTyle-coloured 3D blades close up (else Blender clumps at every distance)
     bool gpu = false;
     bool shadows = false;
