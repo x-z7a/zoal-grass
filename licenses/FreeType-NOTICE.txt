@@ -1,0 +1,10 @@
+The settings window's fonts are rasterised with FreeType 2.14.3, used under the FreeType License (FTL):
+
+    Portions of this software are copyright (c) 2026 The FreeType Project (https://freetype.org).
+    All rights reserved.
+
+The full licence text is docs/FTL.TXT in the FreeType source (https://gitlab.freedesktop.org/freetype/freetype).
+
+The window is drawn with Dear ImGui v1.92.9b (MIT, ImGui-LICENSE.txt) and set in Inter v4.1 by Rasmus Andersson
+(SIL Open Font License 1.1, Inter-LICENSE.txt; the font files are in fonts/). Its look, window host and UI kit come
+from zoal-atc (https://github.com/x-z7a/zoal-atc), by the same author.

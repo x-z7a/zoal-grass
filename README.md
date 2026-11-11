@@ -6,7 +6,7 @@ airport you are at.
 - **Grass**: each 4.5 m clump is an instanced OBJ of Blender plant clumps (crossed alpha cards). The same plants at the
   same density grow from the camera to the edge of the grass (one level of detail, about 860 triangles per clump), so
   nothing changes type or thins out as you get closer or zoom (X-Plane scales level-of-detail distances with the
-  zoom). `real_blades = true` (menu: Real 3D blades close up) adds 3D blades coloured from the DINKIssTyle blade strip
+  zoom). `real_blades = true` (Settings > Rendering) adds 3D blades coloured from the DINKIssTyle blade strip
   within `lod_near_m` (40 m; about 20x the triangles there) and a sparser level beyond `lod_mid_m`. No flowers, no
   `.for` forest.
 - **Seen from above**: each lawn clump has a flat ground-cover card under it, the same clump rendered from above, so
@@ -38,19 +38,19 @@ airport you are at.
   cannot guarantee clearance for larger custom assets. Road/object bounds include all matching library variants
   conservatively; pavement classification still uses the first resolved variant. Animated object transforms are not
   evaluated. Reload the plugin after changing scenery packs.
-- **OpenStreetMap roads** (`use_osm_roads = true`, menu: Keep grass off OpenStreetMap roads): roads, car parks and
+- **OpenStreetMap roads** (`use_osm_roads = true`, Settings > Clearance): roads, car parks and
   rail lines from OpenStreetMap around each airport are added to the pavement mask, so grass stays off roads the
   scenery does not describe (ortho, base mesh). Roads take their `width` / `lanes` tags or a width for their class;
   footways count unless tagged unpaved, tracks and paths only when tagged paved; tunnels are ignored. The data is
   downloaded once per airport from an Overpass API server (`osm_overpass_url`, default overpass-api.de; only the
   airport's bounding box is sent) on its own thread and kept in `zoal-grass/osm_cache/` for `osm_cache_days` (30).
   The first visit places the grass at once without them and rebuilds that airport's grass when they arrive (public
-  Overpass servers can take a minute); without a network the grass is simply placed without them. Untick the menu
-  item or set `use_osm_roads = false` to switch it off. Map data (c) OpenStreetMap contributors, ODbL.
+  Overpass servers can take a minute); without a network the grass is simply placed without them. Untick it in
+  Settings > Clearance or set `use_osm_roads = false` to switch it off. Map data (c) OpenStreetMap contributors, ODbL.
 
 ## Seasons and styles
 
-Plugins > zoal-grass > Season / style (or `style =` in `zoal-grass.ini`):
+Settings > Look > Season (or `style =` in `zoal-grass.ini`):
 
 | style | look | dry blades | height |
 |---|---|---|---|
@@ -59,12 +59,12 @@ Plugins > zoal-grass > Season / style (or `style =` in `zoal-grass.ini`):
 | `late_summer` | warm, drying | 45 % | 1.05x |
 | `autumn` | olive / brown | 55 % | 0.95x |
 | `winter` | dormant tan | 80 % | 0.7x |
-| `custom` | summer colours | `dry_mix` / Custom grass colour menu | 1.0x |
+| `custom` | summer colours | `dry_mix` / Settings > Look > Dry grass | 1.0x |
 | `auto` (default) | season from the **sim's** date (`sim/time/local_date_days`) and the aircraft latitude (southern hemisphere shifted, tropics summer, winters below 40° autumn); `sim/weather/region/snow_cover` ≥ 15 % forces winter, ≥ 60 % hides the grass. Re-checked every 5 s. |
 
 ## Plants / biome
 
-Plugins > zoal-grass > Plants / biome (or `biome =` in `zoal-grass.ini`). `auto` (default) looks up the Koppen
+Settings > Look > Plants (or `biome =` in `zoal-grass.ini`). `auto` (default) looks up the Koppen
 climate at the aircraft position (a 0.25° grid; airports in a coastal water cell take the nearest land). A new climate
 is taken up while no airport has grass (in flight), so an airport on a climate border keeps one look:
 
@@ -90,24 +90,47 @@ Unzip a release and drop the `zoal-grass` folder into `<X-Plane 12>/Resources/pl
 zoal-grass/
   mac_x64/zoal-grass.xpl   win_x64/zoal-grass.xpl   lin_x64/zoal-grass.xpl
   resources/               grass_art.txt, climate_kg.bin, textures/zg_atlas_<style>.png
+  fonts/                   Inter (the settings window's typeface)
   licenses/
 ```
 
-Settings: Plugins > zoal-grass, or `zoal-grass/zoal-grass.ini` (written on first start). The existing
-`use_dsf_polygons = true` setting controls the expanded scenery mask (menu: Keep grass off scenery roads and buildings).
-Commands:
+## Settings window
+
+**Plugins > zoal-grass > Settings…** (or the `zoal-grass/settings` command) opens a window with every setting,
+in five tabs:
+
+| tab | what |
+|---|---|
+| Look | season and plants (auto or picked), dry grass (custom season), height, density, width |
+| Placement | radius, clump spacing, grass outside the boundary, steepest slope; grass on dirt / gravel / turf, pavement clearance |
+| Clearance | scenery roads and buildings, the always / never pavement word lists; OpenStreetMap roads, the Overpass server, how long downloads are kept |
+| Rendering | real 3D blades and their distances, GPU mode, shadows, normal map, how far beyond the radius grass is removed |
+| Advanced | theme (Graphite, Daylight, Night), the airport area margins, mask resolution, status logging, reset to defaults |
+
+The header shows what is growing (season, plants, Koppen climate, clumps) and the on / off switch. Changes apply as
+you make them (a slider when you let go); **Save** writes `zoal-grass/zoal-grass.ini`, **Reload** reads it back.
+It is drawn with Dear ImGui by X-Plane's panel graphics, in zoal-atc's look (Inter, the same palettes and controls),
+and needs **X-Plane 12.4.4 or newer**; on an older X-Plane the plugin still loads and keeps the full menu.
+
+Settings also live in `zoal-grass/zoal-grass.ini` (written on first start). Commands: `zoal-grass/settings`,
 `zoal-grass/toggle`, `zoal-grass/reload`. Log lines start with `zoal-grass:` in `Log.txt`. Generated objects go to
 `zoal-grass/cache/` and are rebuilt when look settings change.
 
 ## Build
 
 ```sh
-scripts/ensure-deps.sh                     # X-Plane SDK 410 into .cache/sdk (ZOAL_GRASS_SDK_ROOT reuses a local one)
+scripts/ensure-deps.sh                     # X-Plane SDK 410, Dear ImGui, FreeType, Inter into .cache (pinned, checked)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release       # -> build/<platform>/zoal-grass.xpl
 ctest --test-dir build -C Release          # X-Plane-free core tests
 cmake --build build --target install_xplane -- # macOS dev loop: -DXPLANE_ROOT=... (default /Users/dzou/X-Plane 12)
 ```
+
+The settings window can be checked without X-Plane: configure with `-DZOAL_GRASS_BUILD_PREVIEW=ON`, then
+`build/settings_preview .cache/inter-v4.1 out.ppm <tab 0-4> <graphite|daylight|night> 780 680 1.5` renders it
+(software rasteriser from zoal-atc's `tools/panel_preview.cpp`). The window code (`src/gui/`) comes from zoal-atc:
+`imgui_window` (the X-Plane host; its SDK 4.4 calls are looked up at run time), `kit` and the palettes and controls
+in `settings_view`.
 
 The public-domain 7-Zip C decoder is vendored at a pinned revision in `third_party/7zip/` (see
 `licenses/7zip-NOTICE.txt`); no external 7z executable is required. Core tests include synthetic scenery stacks,

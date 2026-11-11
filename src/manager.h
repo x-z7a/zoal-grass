@@ -37,6 +37,9 @@ public:
     std::string status() const;
     const std::string& active_style() const { return active_style_; }
     const std::string& active_biome() const { return active_biome_; }
+    int active_koppen() const { return active_koppen_; }
+    int instance_count() const { return count_; }
+    size_t active_airports() const { return airports_.size(); }
     void log(const std::string& msg) const;
 
 private:

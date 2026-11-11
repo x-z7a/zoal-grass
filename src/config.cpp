@@ -75,6 +75,7 @@ const Field kFields[] = {
     F_BOOL(cast_shadows, "let the grass cast shadows (costly)"),
     F_BOOL(normal_map, "use the DINKIssTyle normal map"),
     F_BOOL(log_stats, "write a status line to Log.txt every 30 s"),
+    F_STR(ui_theme, "settings window theme: graphite (dark, default), daylight (light) or night (dim)"),
 };
 
 }  // namespace
@@ -99,6 +100,8 @@ void Settings::clamp() {
     osm_cache_days = clampv(osm_cache_days, 1.0, 3650.0);
     osm_overpass_url = trim(osm_overpass_url);
     if (osm_overpass_url.rfind("http", 0) != 0) osm_overpass_url = "https://overpass-api.de/api/interpreter";
+    ui_theme = lower(trim(ui_theme));
+    if (ui_theme != "daylight" && ui_theme != "night") ui_theme = "graphite";
     biome = lower(trim(biome));
     if (biome != "auto" && find_biome(biome) < 0) biome = "auto";
 }
@@ -146,6 +149,19 @@ Settings load_settings(const std::string& path, std::vector<std::string>& warnin
     }
     s.clamp();
     return s;
+}
+
+bool settings_equal(const Settings& a, const Settings& b) {
+    for (const Field& f : kFields) {
+        const char* pa = reinterpret_cast<const char*>(&a) + f.offset;
+        const char* pb = reinterpret_cast<const char*>(&b) + f.offset;
+        bool same = f.kind == Kind::Bool  ? *reinterpret_cast<const bool*>(pa) == *reinterpret_cast<const bool*>(pb)
+                    : f.kind == Kind::Num ? *reinterpret_cast<const double*>(pa) == *reinterpret_cast<const double*>(pb)
+                                          : *reinterpret_cast<const std::string*>(pa) ==
+                                                *reinterpret_cast<const std::string*>(pb);
+        if (!same) return false;
+    }
+    return true;
 }
 
 bool save_settings(const std::string& path, const Settings& s) {

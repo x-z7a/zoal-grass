@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "config.h"
+#include "gui/settings_window.h"
 #include "manager.h"
 #include "biome.h"
 #include "style.h"
@@ -26,7 +27,8 @@ namespace
     std::string g_plugin_dir, g_ini;
     XPLMFlightLoopID g_loop = nullptr;
     XPLMMenuID g_menu = nullptr;
-    XPLMCommandRef g_cmd_toggle = nullptr, g_cmd_reload = nullptr;
+    XPLMCommandRef g_cmd_toggle = nullptr, g_cmd_reload = nullptr, g_cmd_settings = nullptr;
+    bool g_gui = false;   // the settings window runs (X-Plane 12.4.4+); else the classic menu tree
 
     const double kRadii[] = {200, 300, 400, 800, 1600};
     const double kSpacings[] = {3.0, 3.5, 4.5, 6.0, 8.0};
@@ -52,6 +54,7 @@ namespace
         kReload,
         kSave,
         kStatus,
+        kSettings,
         kRadiusBase = 100,
         kSpacingBase = 200,
         kHeightBase = 300,
@@ -210,6 +213,9 @@ namespace
             case kStatus:
                 log_line(g_mgr->status());
                 return;
+            case kSettings:
+                zg::gui::toggle_settings_window();
+                return;
             default:
                 return;
             }
@@ -272,6 +278,70 @@ namespace
         sync_menu();
     }
 
+    // With the settings window: a short menu that opens it. Every setting lives in the window.
+    void build_compact_menu()
+    {
+        int item = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "zoal-grass", nullptr, 0);
+        g_menu = XPLMCreateMenu("zoal-grass", XPLMFindPluginsMenu(), item, menu_handler, nullptr);
+        add_item(g_menu, "Settings\xE2\x80\xA6", kSettings);
+        add_item(g_menu, "Grass enabled", kEnabled);
+        XPLMAppendMenuSeparator(g_menu);
+        add_item(g_menu, "Reload settings from zoal-grass.ini", kReload);
+        add_item(g_menu, "Save current settings to zoal-grass.ini", kSave);
+        sync_menu();
+    }
+
+    bool start_gui(const std::string &xp_root)
+    {
+        zg::gui::SettingsHost host;
+        host.plugin_dir = g_plugin_dir;
+        host.xp_root = xp_root;
+        host.version = ZOAL_GRASS_VERSION;
+        host.get = []
+        { return g_mgr ? g_mgr->settings() : Settings(); };
+        host.apply = [](Settings s)
+        {
+            if (!g_mgr)
+                return;
+            s.clamp();
+            g_mgr->apply_settings(s);
+            sync_menu();
+        };
+        host.save = [](const Settings &s)
+        {
+            bool ok = save_settings(g_ini, s);
+            log_line(ok ? "settings saved to " + g_ini : "could not save " + g_ini);
+            return ok;
+        };
+        host.reload = []
+        {
+            reload_settings();
+            sync_menu();
+            return g_mgr ? g_mgr->settings() : Settings();
+        };
+        host.status = []
+        {
+            zg::gui::LiveStatus st;
+            if (!g_mgr)
+                return st;
+            st.enabled = g_mgr->settings().enabled;
+            st.style = g_mgr->active_style();
+            st.biome = g_mgr->active_biome();
+            st.koppen = koppen_symbol(g_mgr->active_koppen());
+            st.instances = g_mgr->instance_count();
+            st.airports = int(g_mgr->active_airports());
+            return st;
+        };
+        host.log_status = []
+        {
+            if (g_mgr)
+                log_line(g_mgr->status());
+        };
+        host.log = [](const std::string &m)
+        { log_line(m); };
+        return zg::gui::start_settings_window(std::move(host));
+    }
+
     float flight_loop(float since, float, int, void *)
     {
         if (!g_mgr)
@@ -287,6 +357,8 @@ namespace
             menu_handler(nullptr, reinterpret_cast<void *>(intptr_t(kEnabled)));
         else if (cmd == g_cmd_reload)
             menu_handler(nullptr, reinterpret_cast<void *>(intptr_t(kReload)));
+        else if (cmd == g_cmd_settings)
+            zg::gui::toggle_settings_window();
         return 1;
     }
 
@@ -336,7 +408,15 @@ PLUGIN_API int XPluginEnable()
     XPLMCreateFlightLoop_t fl{sizeof(XPLMCreateFlightLoop_t), xplm_FlightLoop_Phase_BeforeFlightModel, flight_loop, nullptr};
     g_loop = XPLMCreateFlightLoop(&fl);
     XPLMScheduleFlightLoop(g_loop, 1.0f, 1);
-    build_menu();
+    g_gui = start_gui(xp_root);
+    if (g_gui)
+        build_compact_menu();
+    else
+        build_menu();   // X-Plane before 12.4.4: no panel-graphics windows
+    log_line(g_gui ? "settings window ready: Plugins > zoal-grass > Settings, or the zoal-grass/settings command"
+                   : "settings window needs X-Plane 12.4.4 or newer; using the menu");
+    g_cmd_settings = XPLMCreateCommand("zoal-grass/settings", "zoal-grass: show or hide the settings window");
+    XPLMRegisterCommandHandler(g_cmd_settings, cmd_handler, 1, nullptr);
     g_cmd_toggle = XPLMCreateCommand("zoal-grass/toggle", "zoal-grass: toggle grass");
     g_cmd_reload = XPLMCreateCommand("zoal-grass/reload", "zoal-grass: reload settings");
     XPLMRegisterCommandHandler(g_cmd_toggle, cmd_handler, 1, nullptr);
@@ -351,6 +431,10 @@ PLUGIN_API void XPluginDisable()
         XPLMUnregisterCommandHandler(g_cmd_toggle, cmd_handler, 1, nullptr);
     if (g_cmd_reload)
         XPLMUnregisterCommandHandler(g_cmd_reload, cmd_handler, 1, nullptr);
+    if (g_cmd_settings)
+        XPLMUnregisterCommandHandler(g_cmd_settings, cmd_handler, 1, nullptr);
+    zg::gui::stop_settings_window();
+    g_gui = false;
     if (g_loop)
         XPLMDestroyFlightLoop(g_loop);
     g_loop = nullptr;

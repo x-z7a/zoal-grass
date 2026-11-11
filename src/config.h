@@ -42,6 +42,8 @@ struct Settings {
     bool normal_map = true;
     // diagnostics
     bool log_stats = false;
+    // the settings window
+    std::string ui_theme = "graphite"; // graphite | daylight | night
 
     void clamp();
     double open_pad_m() const { return grass_outside_airport ? radius_m + pavement_margin_m : 0.0; }
@@ -50,6 +52,7 @@ struct Settings {
 // Read settings from path, creating the file with defaults if absent. Warnings are appended to `warnings`.
 Settings load_settings(const std::string& path, std::vector<std::string>& warnings);
 bool save_settings(const std::string& path, const Settings& s);
+bool settings_equal(const Settings& a, const Settings& b);   // every setting the ini holds
 
 // Settings that change the pavement mask / the clump objects / the layout.
 bool mask_changed(const Settings& a, const Settings& b);
