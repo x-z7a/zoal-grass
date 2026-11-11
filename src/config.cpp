@@ -70,6 +70,8 @@ const Field kFields[] = {
     F_NUM(width_scale, "extra horizontal tuft scale (0.5 .. 2.0)"),
     F_NUM(lod_near_m, "real_blades only: 3D blades within this camera distance, metres"),
     F_NUM(lod_mid_m, "real_blades only: full plant cards within this camera distance, fewer beyond"),
+    F_BOOL(wind_sway, "grass near the camera sways with the sim's wind (experimental: animated objects; check your FPS)"),
+    F_NUM(wind_sway_deg, "how far the grass leans in a strong wind, degrees (1 .. 20)"),
     F_BOOL(terrain_tilt, "tilt each grass clump to the terrain slope, so its ground cover stays just above the ground"),
     F_BOOL(real_blades, "add the DINKIssTyle-coloured 3D blades close up (more triangles; else the same Blender grass at every distance)"),
     F_BOOL(optimize_for_gpu, "false: two-sided meshes that X-Plane hardware-instances (CPU friendly); true: ATTR_no_cull meshes with half the triangles"),
@@ -97,6 +99,7 @@ void Settings::clamp() {
     lod_mid_m = clampv(lod_mid_m, lod_near_m + 10.0, 3000.0);
     style = lower(trim(style));
     if (style != "auto" && !find_style(style)) style = "auto";
+    wind_sway_deg = clampv(wind_sway_deg, 1.0, 20.0);
     osm_cache_days = clampv(osm_cache_days, 1.0, 3650.0);
     osm_overpass_url = trim(osm_overpass_url);
     if (osm_overpass_url.rfind("http", 0) != 0) osm_overpass_url = "https://overpass-api.de/api/interpreter";
@@ -182,7 +185,7 @@ bool mask_changed(const Settings& a, const Settings& b) {
 bool look_changed(const Settings& a, const Settings& b) {
     return a.style != b.style || a.biome != b.biome || a.grass_height_cm != b.grass_height_cm || a.density != b.density || a.dry_mix != b.dry_mix ||
            a.width_scale != b.width_scale || a.lod_near_m != b.lod_near_m || a.lod_mid_m != b.lod_mid_m ||
-           a.optimize_for_gpu != b.optimize_for_gpu || a.real_blades != b.real_blades || a.cast_shadows != b.cast_shadows ||
+           a.optimize_for_gpu != b.optimize_for_gpu || a.real_blades != b.real_blades || a.wind_sway != b.wind_sway || a.cast_shadows != b.cast_shadows ||
            a.normal_map != b.normal_map || a.spacing_m != b.spacing_m || a.radius_m != b.radius_m;
 }
 

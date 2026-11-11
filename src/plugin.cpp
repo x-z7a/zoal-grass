@@ -48,6 +48,7 @@ namespace
         kShadows,
         kNormal,
         kBlades,
+        kWind,
         kOsm,
         kReload,
         kSave,
@@ -122,6 +123,8 @@ namespace
                 on = s.normal_map;
             else if (id == kBlades)
                 on = s.real_blades;
+            else if (id == kWind)
+                on = s.wind_sway;
             else if (id == kOsm)
                 on = s.use_osm_roads;
             else
@@ -197,6 +200,9 @@ namespace
             case kBlades:
                 s.real_blades = !s.real_blades;
                 break;
+            case kWind:
+                s.wind_sway = !s.wind_sway;
+                break;
             case kOsm:
                 s.use_osm_roads = !s.use_osm_roads;
                 break;
@@ -261,6 +267,7 @@ namespace
         add_item(g_menu, "Keep grass off OpenStreetMap roads (online)", kOsm);
         add_item(g_menu, "Grass outside the airport boundary", kOutside);
         XPLMAppendMenuSeparator(g_menu);
+        add_item(g_menu, "Grass sways in the wind (experimental)", kWind);
         add_item(g_menu, "Real 3D blades close up", kBlades);
         add_item(g_menu, "Optimize for GPU (single-sided)", kGpu);
         add_item(g_menu, "Grass casts shadows", kShadows);

@@ -44,6 +44,9 @@ private:
         XPLMInstanceRef inst = nullptr;      // nullptr: no grass here
         double lat = 0, lon = 0, alt = 0;
         float heading = 0, pitch = 0, roll = 0;   // pitch / roll: stood on the terrain slope
+        float x = 0, y = 0, z = 0;                 // local position (updated when the local origin moves)
+        float seed = 0;                            // wind: a per-clump phase
+        bool swaying = false;                      // wind: values currently set (else all zero)
     };
     struct Pending {
         int i, j;
@@ -89,6 +92,7 @@ private:
     Made create(AirportState& st, int i, int j, double px, double py, double ref_y, double min_ny, Cell& out);
     bool ground_altitude(AirportState& st, double lat, double lon, double ref_y);
     void follow_origin();
+    void sway(double t);                           // wind: tilt the clumps near the camera
     // season style and biome for a position: "auto" -> Koppen climate there, the sim date and snow cover;
     // keep_climate: the climate of the current look instead of the one at (lat, lon)
     std::string resolve_look(double lat, double lon, int& biome, int& koppen, bool keep_climate = false) const;
@@ -106,6 +110,9 @@ private:
     XPLMProbeRef probe_ = nullptr;
     XPLMDataRef lat_ref_ = nullptr, lon_ref_ = nullptr, y_ref_ = nullptr, latr_ref_ = nullptr, lonr_ref_ = nullptr;
     XPLMDataRef fps_ref_ = nullptr, day_ref_ = nullptr, snow_ref_ = nullptr;
+    XPLMDataRef wind_x_ref_ = nullptr, wind_z_ref_ = nullptr;
+    std::vector<XPLMDataRef> sway_refs_;           // our instance datarefs (registered before any object loads)
+    bool sway_objects_ = false;                    // the loaded objects are animated for the wind
     bool snow_hidden_ = false;
     std::string active_style_, active_biome_;
     int active_koppen_ = 0;
