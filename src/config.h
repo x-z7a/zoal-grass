@@ -24,6 +24,9 @@ struct Settings {
     bool use_dsf_polygons = true;
     std::string dsf_block_words;
     std::string dsf_allow_words;
+    bool use_osm_roads = true;         // keep grass off OpenStreetMap roads, car parks and rail (downloads, cached)
+    std::string osm_overpass_url = "https://overpass-api.de/api/interpreter";
+    double osm_cache_days = 30.0;
     // look (changing any of these rebuilds the clump objects)
     std::string style = "auto";        // auto | spring | summer | late_summer | autumn | winter | custom
     std::string biome = "auto";        // auto (Koppen climate at the aircraft position) | temperate | ... (biome.h)
