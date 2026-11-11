@@ -4,7 +4,8 @@ blender -b --factory-startup -P tools/preview_blender.py -- <dir with zg_*.obj> 
 
 Reads the X-Plane OBJ8 files the plugin writes (VT / IDX / TRIS per ATTR_LOD, TEXTURE), lays clumps out on the same grid
 the plugin uses (quarter-turn rotations), gives every clump the level of detail X-Plane would pick for the camera, and
-renders eye-level, close and low aerial views with Cycles: <out prefix>_eye.png, _close.png, _air.png.
+renders eye-level, close, low aerial and high oblique views with Cycles: <out prefix>_eye.png, _close.png,
+_air.png, _high.png.
 """
 import glob
 import math
@@ -163,7 +164,7 @@ def place(eye):
         for j in range(-half, half + 1):
             var = meshes[rng.randrange(len(meshes))]
             rot = rng.randrange(4)
-            loc = Vector((i * SPACING, j * SPACING, -0.03))
+            loc = Vector((i * SPACING, j * SPACING, 0.0))       # on the terrain, as X-Plane places them
             d = (loc - Vector(eye)).length
             me = next((m for lo, hi, m in var if lo <= d < hi), None)
             if me is None:
@@ -191,3 +192,4 @@ extent = half * SPACING
 shoot("eye", (0, -extent + 6.0, 1.7), (0, 0, 0.0), 35)
 shoot("close", (0, -extent + 10.0, 0.6), (0, -extent + 14.0, 0.1), 35)
 shoot("air", (-extent * 0.3, -extent - 8.0, 15.0), (0, extent * 0.2, 0), 35)
+shoot("high", (0, -extent * 0.6, 45.0), (0, extent * 0.1, 0), 35)        # high oblique: the canopy cards

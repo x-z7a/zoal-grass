@@ -2,7 +2,7 @@
 // resources/grass_art.txt:
 //  - BLADE: the DINKIssTyle blade colour strip (tools/bake_art.py), the colour source of the real 3D blades
 //  - CARD: plant sprites modelled and rendered in Blender (tools/blender_species.py, tools/compose_atlas.py): lawn
-//    clumps, meadow panicles, seed-head grass, tussocks, moss, sedge (upright cards) and clover / rosettes (flat cards)
+//    clumps (side and top views), meadow panicles, seed-head grass, tussocks, moss, sedge (upright cards) and clover / rosettes (flat cards)
 // Each clump is a square OBJ. By default it is one level of detail: the same Blender plants at the same density at
 // every distance and zoom; real_blades adds 3D blades close up (four levels). Which plants grow comes from the biome
 // (biome.h).
@@ -66,6 +66,7 @@ private:
     std::vector<Strip> blades_;           // colour source of the 3D blades
     std::vector<Card> cards_;
     // card indices per kind (into cards_)
+    std::vector<int> lawn_top_;          // per cards_ index: the matching top-view lawn card, or -1
     std::vector<int> lawn_, lawn_dry_, meadow_, seed_tame_, seed_wild_, tussock_green_, tussock_dry_, moss_, sedge_,
         clover_, rosette_;
 };

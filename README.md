@@ -4,12 +4,14 @@ Native X-Plane 12 plugin (C++, XPLM; macOS, Windows, Linux) that grows 3D grass 
 airport you are at.
 
 - **Grass**: each 4.5 m clump is an instanced OBJ of Blender plant clumps (crossed alpha cards). The same plants at the
-  same density grow from the camera to the edge of the grass (one level of detail, about 700 triangles per clump), so
+  same density grow from the camera to the edge of the grass (one level of detail, about 860 triangles per clump), so
   nothing changes type or thins out as you get closer or zoom (X-Plane scales level-of-detail distances with the
   zoom). `real_blades = true` (menu: Real 3D blades close up) adds 3D blades coloured from the DINKIssTyle blade strip
   within `lod_near_m` (40 m; about 20x the triangles there) and a sparser level beyond `lod_mid_m`. No flowers, no
   `.for` forest.
-- **Plants** (modelled in Blender, see [Art](#art)): lawn clumps in four colours, meadow grass with feathery panicles,
+- **Seen from above**: each lawn clump has a flat ground-cover card under it, the same clump rendered from above, so
+  the field stays full of grass from high and overhead views where upright cards are edge-on (2 triangles each).
+- **Plants** (modelled in Blender, see [Art](#art)): lawn clumps in four colours (side and top views), meadow grass with feathery panicles,
   timothy and wild awned seed-head grass, green and dry bunch-grass tussocks, moss cushions, sedge, clover and
   dandelion / plantain rosettes. They grow in drifts, and every clump variant leans to one lawn colour, so fields look patchy, not tiled.
 - **Biomes from the GPS position**: a Koppen-Geiger climate map (Beck et al. 2018, `licenses/Beck-KG-NOTICE.txt`)
