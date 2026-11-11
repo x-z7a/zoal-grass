@@ -57,17 +57,17 @@ void add_item(XPLMMenuID menu, const char* name, intptr_t id) {
 void sync_menu() {
     if (!g_mgr) return;
     const Settings& s = g_mgr->settings();
-    auto near = [](double a, double b) { return std::fabs(a - b) < 1e-6; };
+    auto same = [](double a, double b) { return std::fabs(a - b) < 1e-6; };
     for (auto& it : g_items) {
         bool on = false;
         intptr_t id = it.id;
-        if (id >= kFlowerBase) on = near(s.flowers, kFlowerAmounts[id - kFlowerBase]);
+        if (id >= kFlowerBase) on = same(s.flowers, kFlowerAmounts[id - kFlowerBase]);
         else if (id >= kStyleBase) on = id == kStyleBase ? s.style == "auto" : s.style == kStyles[id - kStyleBase - 1].name;
-        else if (id >= kDryBase) on = s.style == "custom" && near(s.dry_mix, kDry[id - kDryBase]);
-        else if (id >= kDensityBase) on = near(s.density, kDensities[id - kDensityBase]);
-        else if (id >= kHeightBase) on = near(s.grass_height_cm, kHeights[id - kHeightBase]);
-        else if (id >= kSpacingBase) on = near(s.spacing_m, kSpacings[id - kSpacingBase]);
-        else if (id >= kRadiusBase) on = near(s.radius_m, kRadii[id - kRadiusBase]);
+        else if (id >= kDryBase) on = s.style == "custom" && same(s.dry_mix, kDry[id - kDryBase]);
+        else if (id >= kDensityBase) on = same(s.density, kDensities[id - kDensityBase]);
+        else if (id >= kHeightBase) on = same(s.grass_height_cm, kHeights[id - kHeightBase]);
+        else if (id >= kSpacingBase) on = same(s.spacing_m, kSpacings[id - kSpacingBase]);
+        else if (id >= kRadiusBase) on = same(s.radius_m, kRadii[id - kRadiusBase]);
         else if (id == kEnabled) on = s.enabled;
         else if (id == kDirt) on = s.grass_on_dirt;
         else if (id == kGravel) on = s.grass_on_gravel;

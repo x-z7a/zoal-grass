@@ -42,6 +42,10 @@ add_library(zoal_grass_core STATIC
     src/platform.cpp
 )
 target_include_directories(zoal_grass_core PUBLIC src)
+if(WIN32)
+    # windows.h (pulled in by the XPLM headers on Windows) must not define min/max macros over std::min/std::max
+    target_compile_definitions(zoal_grass_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
 if(MSVC)
     target_compile_options(zoal_grass_core PUBLIC /W3 /utf-8 /permissive- /D_CRT_SECURE_NO_WARNINGS)
 else()
