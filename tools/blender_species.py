@@ -199,7 +199,7 @@ def meadow(g, rng, pal):
         lean = (rng.random() - 0.5) * 0.12
         top = (x + lean, y, h)
         g.stem([(x, y, 0), (x + lean * 0.4, y, h * 0.5), top], 0.0022, mid, tip)
-        panicle(g, rng, top, 0.15 + 0.07 * rng.random(), mix(tip, (0.62, 0.48, 0.50), 0.35), (0.85, 0.82, 0.62))
+        panicle(g, rng, top, 0.15 + 0.07 * rng.random(), mix(mid, (0.50, 0.40, 0.40), 0.3), mix(tip, (0.62, 0.56, 0.40), 0.5))
 
 
 def seed_tall(g, rng, pal, awns):

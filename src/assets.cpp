@@ -16,7 +16,7 @@ namespace zg {
 namespace {
 
 const char* kNormal = "zg_atlas_NRM.png";
-const char* kBuildVersion = "species-2";  // part of the object file names: bump when the geometry code changes
+const char* kBuildVersion = "species-3";  // part of the object file names: bump when the geometry code changes
 constexpr double kPi2 = 6.283185307179586;
 constexpr double kUpBias = 0.45;          // blade normals lean up this much (soft lighting, no glowing flat cards)
 constexpr double kCardUpBias = 0.78;      // card normals: lit almost like the ground they stand on
@@ -369,7 +369,7 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                 }
             }
 
-            // ---- lawn clumps (Blender cards): join the thinning blades at level 1, carry the lawn beyond
+            // ---- lawn clumps (Blender cards): mixed into the blades close up, carry the lawn beyond 40 m
             {
                 int n = std::min(kMaxCards, int(std::lround(area * kLawnCardsPerM2 * p.density * mx.blades)));
                 auto pts = spread(n);
@@ -385,9 +385,10 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                     lcs.push_back({U(rng) * kPi2, s * p.width_scale * (0.75 + 0.5 * U(rng)), s, U(rng) * kPi2,
                                    (U(rng) - 0.5) * 0.25, ci, U(rng) < 0.5});
                 }
-                const double share[kLods] = {0.0, 0.45, 1.0, 0.5};
+                // the same clumps close up as at 16 .. 40 m: zooming in must not change which plants grow
+                const double share[kLods] = {0.6, 0.6, 1.0, 0.5};
                 const double grow[kLods] = {1.0, 1.0, 1.0, 1.3};      // the far level: fewer, larger clumps
-                for (int L = 1; L < kLods; ++L) {
+                for (int L = 0; L < kLods; ++L) {
                     int nl = int(n * share[L]);
                     for (int k = 0; k < nl; ++k) {
                         const LC& c = lcs[size_t(k)];
