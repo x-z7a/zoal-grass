@@ -263,7 +263,7 @@ namespace
         add_item(g_menu, "Grass on dirt", kDirt);
         add_item(g_menu, "Grass on gravel", kGravel);
         add_item(g_menu, "Grass on turf runways", kTurf);
-        add_item(g_menu, "Keep grass off scenery pavement polygons", kDsf);
+        add_item(g_menu, "Keep grass off scenery roads and buildings", kDsf);
         add_item(g_menu, "Keep grass off OpenStreetMap roads (online)", kOsm);
         add_item(g_menu, "Grass outside the airport boundary", kOutside);
         XPLMAppendMenuSeparator(g_menu);

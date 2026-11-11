@@ -69,6 +69,33 @@ void fill(std::vector<uint8_t>& grid, int w, int h, double x0, double y0, double
     }
 }
 
+// Mark every cell touched by a polygon boundary, including sub-cell strips and diagonal edges.
+// Scanline fill alone samples cell centers and can otherwise miss a narrow road entirely.
+void fill_edges(std::vector<uint8_t>& grid, int w, int h, double x0, double y0, double cell,
+                const std::vector<XYRing>& loops) {
+    for (const auto& loop : loops) {
+        if (loop.size() < 2) continue;
+        XY a = loop.back();
+        for (XY b : loop) {
+            double ax = (a.x - x0) / cell, ay = (a.y - y0) / cell;
+            double bx = (b.x - x0) / cell, by = (b.y - y0) / cell;
+            if (ay > by) { std::swap(ax, bx); std::swap(ay, by); }
+            int first = int(std::max(0.0, std::floor(ay - 1e-9)));
+            int last = int(std::min(double(h - 1), std::floor(by + 1e-9)));
+            for (int j = first; j <= last; ++j) {
+                double t0 = by > ay ? std::clamp((j - ay) / (by - ay), 0.0, 1.0) : 0;
+                double t1 = by > ay ? std::clamp((j + 1 - ay) / (by - ay), 0.0, 1.0) : 1;
+                double l = ax + (bx - ax) * t0, r = ax + (bx - ax) * t1;
+                if (l > r) std::swap(l, r);
+                int lo = int(std::max(0.0, std::floor(l - 1e-9)));
+                int hi = int(std::min(double(w - 1), std::floor(r + 1e-9)));
+                if (lo <= hi) std::fill(grid.begin() + size_t(j) * w + lo, grid.begin() + size_t(j) * w + hi + 1, 1);
+            }
+            a = b;
+        }
+    }
+}
+
 // Grow non-zero cells by a disc of `radius` cells (offsets with dx^2 + dy^2 <= r^2 + r).
 std::vector<uint8_t> dilate(const std::vector<uint8_t>& src, int w, int h, double radius) {
     if (radius <= 0) return src;
@@ -137,6 +164,17 @@ SurfaceClass surface_class(int code) {
     return PAVED;
 }
 
+bool PavementMask::footprint_ok(double x, double y, double radius) const {
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(radius) || radius < 0) return false;
+    double a = (x - radius - x0) * inv, b = (y - radius - y0) * inv;
+    double c = (x + radius - x0) * inv, d = (y + radius - y0) * inv;
+    if (a < 0 || b < 0 || c >= w || d >= h) return false;
+    for (int j = int(b); j <= int(d); ++j)
+        for (int i = int(a); i <= int(c); ++i)
+            if (blocked[size_t(j) * w + i] || area[size_t(j / f) * cw + i / f] != 1) return false;
+    return true;
+}
+
 std::unique_ptr<PavementMask> build_mask(const Airport& ap, const MaskSettings& s) {
     LatLon center;
     if (!ap.center(center)) return nullptr;
@@ -202,8 +240,6 @@ std::unique_ptr<PavementMask> build_mask(const Airport& ap, const MaskSettings& 
     int h = int(std::ceil((maxy - miny) / cell / f)) * f;
 
     std::vector<uint8_t> grid(size_t(w) * size_t(h), 0);
-    // draped DSF polygons go on top of everything (order 0, painted last), clipped to the grid
-    for (auto& p : ap.draped) polys.push_back({0, 0, surface_class(p.surface), project(p.loops, proj), false});
     std::stable_sort(polys.begin(), polys.end(), [](const Element& a, const Element& b) {
         return std::tie(a.order, a.layer) > std::tie(b.order, b.layer);
     });
@@ -216,6 +252,16 @@ std::unique_ptr<PavementMask> build_mask(const Airport& ap, const MaskSettings& 
     table[MOWED] = s.grass_on_turf_runways ? 0 : 1;
     std::vector<uint8_t> blocked(grid.size());
     for (size_t k = 0; k < grid.size(); ++k) blocked[k] = table[grid[k]];
+
+    // Scenery keep-outs form a union: a lower-priority dirt polygon must never erase a road/building.
+    for (const auto& p : polys)
+        if (table[p.cls]) fill_edges(blocked, w, h, minx, miny, cell, p.loops);
+    for (const auto& p : ap.draped) {
+        if (!table[surface_class(p.surface)]) continue;
+        auto loops = project(p.loops, proj);
+        fill(blocked, w, h, minx, miny, cell, loops, 1);
+        fill_edges(blocked, w, h, minx, miny, cell, loops);
+    }
 
     auto mask = std::make_unique<PavementMask>();
     if (s.grass_on_turf_runways) {

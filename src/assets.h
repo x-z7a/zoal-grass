@@ -43,6 +43,7 @@ struct BuiltObjects {
     std::vector<std::string> mowed;
     int tufts = 0, cards = 0;
     std::array<int, kLods> tris{};     // per level of detail, first normal object
+    double clearance_m = 0;          // horizontal radius enclosing every vertex, variant and LOD
 };
 
 class GrassAssets {

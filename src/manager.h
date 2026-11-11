@@ -133,7 +133,7 @@ private:
     double tick_ms_ = 0, tick_max_ = 0;
     BuiltObjects built_;
 
-    // worker-thread state: the draped-polygon reader (recreated when its settings change)
+    // worker-thread state: the scenery-mask reader (recreated when its settings change)
     std::shared_ptr<std::unique_ptr<GroundPolygons>> ground_;
     std::shared_ptr<std::string> ground_key_;
 };

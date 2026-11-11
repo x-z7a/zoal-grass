@@ -50,11 +50,13 @@ struct MeshOut {
     bool two_sided = true;
     std::string vt;
     int nverts = 0;
+    double radius = 0;
     std::vector<int> idx[kLods];
     std::vector<float> pos;   // x, y, z per vertex (to sort triangles into sway cells)
     char line[160];
 
     int vert(double x, double y, double z, float nx, float ny, float nz, double u, double v) {
+        radius = std::max(radius, std::hypot(x, z));
         std::snprintf(line, sizeof line, "VT %.4f %.4f %.4f %.3f %.3f %.3f %.5f %.5f\n", x, y, z, nx, ny, nz, u, v);
         vt += line;
         pos.insert(pos.end(), {float(x), float(y), float(z)});
@@ -456,6 +458,8 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                 }
             }
             size_t total = 0;
+            // Includes the rounding in OBJ output and a small allowance for float instance coordinates.
+            out.clearance_m = std::max(out.clearance_m, m.radius + 0.05);
             for (auto& v : m.idx) total += v.size();
             if (sway) total += m.idx[0].size();   // the near level is written twice: animated, then still (far)
             char name[96];
