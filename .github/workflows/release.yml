@@ -112,7 +112,8 @@ jobs:
           path: dist/zoal-grass-${{ steps.version.outputs.version }}.zip
           if-no-files-found: error
 
-      # Only a tag publishes; workflow_dispatch rehearses the same archive as an artifact.
+      # Only a tag publishes; workflow_dispatch rehearses the same archive as an artifact. A release that already
+      # exists for the tag gets the zip uploaded (replacing an old one) instead of failing.
       - name: Publish release
         if: github.event_name == 'push'
         env:
@@ -129,4 +130,13 @@ jobs:
               echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${version}"
             fi
           } > release-notes.md
-          gh release create "${version}" "dist/zoal-grass-${version}.zip" --title "${version}" --notes-file release-notes.md
+          zip="dist/zoal-grass-${version}.zip"
+          if gh release view "${version}" >/dev/null 2>&1; then
+            # The release already exists (made in the GitHub UI, which also pushes the tag, or a re-run):
+            # attach the zip, replacing an older one, and leave the existing notes alone.
+            gh release upload "${version}" "${zip}" --clobber
+          else
+            prerelease=()
+            case "${version}" in *-*) prerelease=(--prerelease) ;; esac   # v1.2.3-alpha.1 and the like
+            gh release create "${version}" "${zip}" --title "${version}" --notes-file release-notes.md "${prerelease[@]}"
+          fi
