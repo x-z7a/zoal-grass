@@ -10,7 +10,7 @@
 namespace zg {
 
 enum Biome : int {
-    kTemperate = 0,     // Cf, Cw: lush lawn and meadow, clover, dandelions
+    kTemperate = 0,     // Cf, Cw: lush lawn and meadow, clover, rosettes
     kContinental,       // D: meadow, more moss and sedge, real winters
     kMediterranean,     // Cs: green in winter and spring, golden seed grass in summer
     kSteppe,            // BS: bunch-grass tussocks and dry seed grass
@@ -57,10 +57,7 @@ struct SpeciesMix {
     double moss = 0;             // moss cushions
     double sedge = 0;            // dark spiky sedge / rush
     double clover = 0;           // flat clover patches
-    double clover_flowers = 0;   //   share in flower
     double rosette = 0;          // flat dandelion / plantain rosettes
-    double dandelion = 0;        // dandelion flowers and seed clocks
-    double flowers = 1.0;        // factor on the style's DINKIssTyle flowers
 };
 SpeciesMix species_mix(int biome, const std::string& style);
 

@@ -268,7 +268,7 @@ def sedge(g, rng):
                 jitter(mix(mid, tip, rng.random()), rng, 0.2), segs=7)
 
 
-def clover(g, rng, flowers):
+def clover(g, rng):
     green, light = (0.16, 0.34, 0.08), (0.48, 0.62, 0.36)
     for _ in range(70):
         a, r = rng.random() * 2 * math.pi, 0.18 * math.sqrt(rng.random())
@@ -293,15 +293,6 @@ def clover(g, rng, flowers):
                 g.tri(hub, chev[s], chev[s + 1])
                 g.tri(chev[s], ring[s], ring[s + 1])
                 g.tri(chev[s], ring[s + 1], chev[s + 1])
-    for _ in range(flowers):                                 # white globe flower heads
-        a, r = rng.random() * 2 * math.pi, 0.13 * math.sqrt(rng.random())
-        c = (math.cos(a) * r, math.sin(a) * r, 0.07)
-        for _ in range(70):
-            u, v = rng.random() * 2 * math.pi, math.acos(2 * rng.random() - 1)
-            d = (math.sin(v) * math.cos(u), math.sin(v) * math.sin(u), math.cos(v))
-            p = tuple(c[i] + d[i] * 0.008 for i in range(3))
-            col = mix((0.95, 0.93, 0.88), (0.85, 0.65, 0.65), rng.random() * 0.4 * max(0, -d[2] + 0.5))
-            g.scale_quad(p, d, (-d[1], d[0], 0), 0.007, 0.002, col)
 
 
 def rosette(g, rng, kind):
@@ -327,34 +318,6 @@ def rosette(g, rng, kind):
                jitter(col_edge, rng, 0.25), n=14, wave=wave)
 
 
-def dandelion_flowers(g, rng):
-    stem_a, stem_b = (0.25, 0.35, 0.12), (0.40, 0.48, 0.18)
-    for k in range(6):
-        x, y = (rng.random() - 0.5) * 0.25, (rng.random() - 0.5) * 0.08
-        h = 0.12 + 0.12 * rng.random()
-        lean = (rng.random() - 0.5) * 0.06
-        top = (x + lean, y, h)
-        g.stem([(x, y, 0), (x + lean * 0.5, y, h * 0.6), top], 0.003, stem_a, stem_b)
-        if k == 5:                                           # one seed clock
-            for _ in range(140):
-                u, v = rng.random() * 2 * math.pi, math.acos(2 * rng.random() - 1)
-                d = (math.sin(v) * math.cos(u), math.sin(v) * math.sin(u), math.cos(v))
-                p = tuple(top[i] + d[i] * 0.02 for i in range(3))
-                g.scale_quad(p, d, (-d[1], d[0], 0), 0.04, 0.0025, (0.80, 0.80, 0.76), (0.98, 0.98, 0.95))
-            continue
-        for q in range(72):                                  # yellow ray florets, the head tilted to the sun
-            a = q * 2.39996
-            r = 0.006 + 0.016 * ((q % 3) / 2)
-            d = (math.cos(a), math.sin(a) * 0.6, 0.45)
-            p = (top[0] + math.cos(a) * r, top[1] + math.sin(a) * r * 0.6, top[2] + 0.004 - r * 0.2)
-            g.scale_quad(p, d, (-math.sin(a), math.cos(a), 0), 0.016, 0.0045, (0.98, 0.78, 0.05), (1.0, 0.88, 0.25))
-        for q in range(10):                                  # green sepals below
-            a = q * 0.628
-            p = (top[0] + math.cos(a) * 0.008, top[1] + math.sin(a) * 0.006, top[2] - 0.008)
-            g.scale_quad(p, (math.cos(a) * 0.3, math.sin(a) * 0.3, -1), (-math.sin(a), math.cos(a), 0), 0.012, 0.002,
-                         stem_a)
-
-
 # ---- the sprite list: name, kind, metres (w, h), pixels (w, h), builder
 SPECIES = [
     ("lawn_lush", "side", (0.64, 0.32), (496, 248), lambda g, r: lawn(g, r, "lush")),
@@ -369,9 +332,7 @@ SPECIES = [
     ("tussock_dry", "side", (0.80, 0.48), (384, 224), lambda g, r: tussock(g, r, "dry")),
     ("moss", "side", (0.56, 0.18), (384, 128), lambda g, r: moss(g, r)),
     ("sedge", "side", (0.80, 0.56), (320, 224), lambda g, r: sedge(g, r)),
-    ("dandelion_fl", "side", (0.36, 0.30), (192, 160), lambda g, r: dandelion_flowers(g, r)),
-    ("clover", "top", (0.40, 0.40), (256, 256), lambda g, r: clover(g, r, 0)),
-    ("clover_fl", "top", (0.40, 0.40), (256, 256), lambda g, r: clover(g, r, 4)),
+    ("clover", "top", (0.40, 0.40), (256, 256), lambda g, r: clover(g, r)),
     ("rosette_dandelion", "top", (0.36, 0.36), (224, 224), lambda g, r: rosette(g, r, "dandelion")),
     ("rosette_plantain", "top", (0.30, 0.30), (192, 192), lambda g, r: rosette(g, r, "plantain")),
 ]

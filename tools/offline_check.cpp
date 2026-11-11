@@ -54,11 +54,11 @@ int main(int argc, char** argv) {
         LookParams p; p.footprint_m = 4.5; p.lod_far = 390; p.lod_near = 40; p.lod_mid = 140;
         p.mix = species_mix(biome, st.name);
         p.height_m = 0.25 * st.height_factor; p.dry_mix = st.dry_mix >= 0 ? st.dry_mix : 0.15;
-        p.texture = st.texture; p.flowers_per_m2 = st.flowers_per_m2; p.flower_mask = st.flower_mask;
+        p.texture = st.texture;
         BuiltObjects bo;
         if (!a.build(argv[4], std::string(argv[3]) + "/objs_" + st.name, p, bo, log)) return 1;
-        std::printf("%-12s objects %zu+%zu, tufts %d cards %d flowers %d, tris %d/%d/%d/%d\n", st.name, bo.normal.size(),
-                    bo.mowed.size(), bo.tufts, bo.cards, bo.flowers, bo.tris[0], bo.tris[1], bo.tris[2], bo.tris[3]);
+        std::printf("%-12s objects %zu+%zu, tufts %d cards %d, tris %d/%d/%d/%d\n", st.name, bo.normal.size(),
+                    bo.mowed.size(), bo.tufts, bo.cards, bo.tris[0], bo.tris[1], bo.tris[2], bo.tris[3]);
     }
     const char* when[] = {"Jan 15", "Apr 15", "Jul 1", "Sep 1", "Oct 20", "Dec 20"};
     int days[] = {14, 104, 181, 243, 292, 353};

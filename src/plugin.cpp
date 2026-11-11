@@ -34,15 +34,12 @@ const double kHeights[] = {10, 15, 25, 35, 50};
 const double kDensities[] = {0.5, 0.75, 1.0, 1.3};
 const double kDry[] = {0.0, 0.15, 0.35, 0.7};
 const char* kDryNames[] = {"Green", "Mostly green", "Half dry", "Dry"};
-const double kFlowerAmounts[] = {0.0, 0.5, 1.0, 2.0};
-const char* kFlowerNames[] = {"None", "Few", "Normal (default)", "Many"};
 
 enum Item : intptr_t {
     kEnabled = 1, kDirt, kGravel, kTurf, kDsf, kOutside, kGpu, kShadows, kNormal, kBlades,
     kReload, kSave, kStatus,
     kRadiusBase = 100, kSpacingBase = 200, kHeightBase = 300, kDensityBase = 400, kDryBase = 500,
     kStyleBase = 600,   // +0 = auto, +1.. = kStyles
-    kFlowerBase = 700,
     kBiomeBase = 800,   // +0 = auto, +1.. = kBiomes
 };
 
@@ -64,7 +61,6 @@ void sync_menu() {
         bool on = false;
         intptr_t id = it.id;
         if (id >= kBiomeBase) on = id == kBiomeBase ? s.biome == "auto" : s.biome == kBiomes[id - kBiomeBase - 1].name;
-        else if (id >= kFlowerBase) on = same(s.flowers, kFlowerAmounts[id - kFlowerBase]);
         else if (id >= kStyleBase) on = id == kStyleBase ? s.style == "auto" : s.style == kStyles[id - kStyleBase - 1].name;
         else if (id >= kDryBase) on = s.style == "custom" && same(s.dry_mix, kDry[id - kDryBase]);
         else if (id >= kDensityBase) on = same(s.density, kDensities[id - kDensityBase]);
@@ -99,7 +95,6 @@ void menu_handler(void*, void* ref) {
     intptr_t id = reinterpret_cast<intptr_t>(ref);
     Settings s = g_mgr->settings();
     if (id >= kBiomeBase) s.biome = id == kBiomeBase ? "auto" : kBiomes[id - kBiomeBase - 1].name;
-    else if (id >= kFlowerBase) s.flowers = kFlowerAmounts[id - kFlowerBase];
     else if (id >= kStyleBase) s.style = id == kStyleBase ? "auto" : kStyles[id - kStyleBase - 1].name;
     else if (id >= kDryBase) { s.dry_mix = kDry[id - kDryBase]; s.style = "custom"; }
     else if (id >= kDensityBase) s.density = kDensities[id - kDensityBase];
@@ -153,8 +148,6 @@ void build_menu() {
     m = sub("Plants / biome");
     add_item(m, "Auto (from the climate at your GPS position)", kBiomeBase);
     for (int i = 0; i < kBiomeCount; ++i) add_item(m, kBiomes[i].label, kBiomeBase + 1 + i);
-    m = sub("Flowers");
-    for (int i = 0; i < 4; ++i) add_item(m, kFlowerNames[i], kFlowerBase + i);
     m = sub("Custom grass colour");
     for (int i = 0; i < 4; ++i) add_item(m, kDryNames[i], kDryBase + i);
     XPLMAppendMenuSeparator(g_menu);

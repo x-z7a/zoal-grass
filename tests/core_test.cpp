@@ -110,8 +110,6 @@ int main(int argc, char** argv) {
         p.height_m = 0.25 * st.height_factor;
         p.dry_mix = st.dry_mix >= 0 ? st.dry_mix : 0.15;
         p.texture = st.texture;
-        p.flowers_per_m2 = st.flowers_per_m2;
-        p.flower_mask = st.flower_mask;
         p.lod_near = 40;
         p.lod_mid = 140;
         p.lod_far = 390;
@@ -119,19 +117,16 @@ int main(int argc, char** argv) {
         std::string dir = scratch + "/objs_" + st.name + "_" + kBiomes[biome].name;
         CHECK(assets.build(resources, dir, p, out, [](const std::string& m) { std::printf("  %s\n", m.c_str()); }));
         CHECK(out.normal.size() == 4 && out.mowed.size() == 4);
-        CHECK(out.tris[0] >= out.tris[2] && out.tris[2] > 0 && out.tris[1] == 0 && out.tris[3] == 0);
-        CHECK(out.tris[0] < 3000);
-        CHECK(out.tris[2] < 2500);                    // beyond 40 m: nearly every clump, keep it cheap
+        CHECK(out.tris[0] > 0 && out.tris[1] == 0 && out.tris[2] == 0 && out.tris[3] == 0);
+        CHECK(out.tris[0] < 1800);                    // one level for every clump: keep it cheap
         std::printf("%-12s %-13s triangles per level %d/%d/%d/%d, %d plant cards\n", st.name, kBiomes[biome].name,
                     out.tris[0], out.tris[1], out.tris[2], out.tris[3], out.cards);
         if (!out.normal.empty()) {
             std::string obj = read_text(out.normal[0]);
             CHECK(obj.rfind("A\n800\nOBJ\n", 0) == 0);
             CHECK(obj.find("TEXTURE " + std::string(st.texture)) != std::string::npos);
-            CHECK(obj.find("ATTR_LOD 0 40") != std::string::npos);
-            CHECK(obj.find("ATTR_LOD 40 390") != std::string::npos);   // one density out to the grass edge
-            CHECK(obj.find("ATTR_LOD 140") == std::string::npos);
-            CHECK(obj.find("ATTR_LOD 0 16") == std::string::npos);
+            CHECK(obj.find("ATTR_LOD 0 390") != std::string::npos);   // one level out to the grass edge
+            CHECK(obj.find("ATTR_LOD", obj.find("ATTR_LOD") + 1) == std::string::npos);
             CHECK(obj.find('\r') == std::string::npos);
             CHECK(is_file(dir + "/" + st.texture));
         }
@@ -147,7 +142,7 @@ int main(int argc, char** argv) {
         p.mix = species_mix(kTemperate, "summer");
         BuiltObjects out;
         CHECK(assets.build(resources, scratch + "/objs_blades", p, out, [](const std::string&) {}));
-        CHECK(out.tris[0] > out.tris[1] && out.tris[1] > out.tris[2] && out.tris[0] < 40000);
+        CHECK(out.tris[0] > out.tris[1] && out.tris[1] > out.tris[2] && out.tris[2] > out.tris[3] && out.tris[0] < 40000);
         std::string obj = read_text(out.normal[0]);
         CHECK(obj.find("ATTR_LOD 0 16") != std::string::npos && obj.find("ATTR_LOD 16 40") != std::string::npos);
         std::printf("real blades  temperate     triangles per level %d/%d/%d/%d\n", out.tris[0], out.tris[1], out.tris[2],

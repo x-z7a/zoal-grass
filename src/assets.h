@@ -1,13 +1,11 @@
 // Builds the grass clump objects from one atlas per season (resources/textures/zg_atlas_<style>.png) described by
 // resources/grass_art.txt:
 //  - BLADE: the DINKIssTyle blade colour strip (tools/bake_art.py), the colour source of the real 3D blades
-//  - FLOWER: the 165 flower plants of DINKIssTyle Lawn06_S_Flower01 (stem, leaves and one of four flower heads)
 //  - CARD: plant sprites modelled and rendered in Blender (tools/blender_species.py, tools/compose_atlas.py): lawn
-//    clumps, meadow panicles, seed-head grass, tussocks, moss, sedge, dandelions (upright cards) and clover / rosettes
-//    (flat cards)
-// Each clump is a square OBJ. By default the same Blender plants grow at every distance (levels: to lod_near with all
-// flowers, to lod_mid with a few, beyond with fewer, larger clumps), so nothing changes type as the camera closes in;
-// real_blades adds 3D blades close up (four levels). Which plants grow comes from the biome (biome.h).
+//    clumps, meadow panicles, seed-head grass, tussocks, moss, sedge (upright cards) and clover / rosettes (flat cards)
+// Each clump is a square OBJ. By default it is one level of detail: the same Blender plants at the same density at
+// every distance and zoom; real_blades adds 3D blades close up (four levels). Which plants grow comes from the biome
+// (biome.h).
 // No .for forest is placed in the sim.
 #pragma once
 
@@ -30,8 +28,6 @@ struct LookParams {
     double footprint_m = 5.0;
     double lod_near = 60, lod_mid = 160, lod_far = 300;   // detailed blades end at 40 % of lod_near
     std::string texture = "zg_atlas_summer.png";   // file in resources/textures
-    double flowers_per_m2 = 0.0;
-    unsigned flower_mask = 0xF;
     SpeciesMix mix;
     bool real_blades = false;   // the DINKIssTyle-coloured 3D blades close up (else Blender clumps at every distance)
     bool gpu = false;
@@ -43,7 +39,7 @@ struct LookParams {
 struct BuiltObjects {
     std::vector<std::string> normal;   // absolute paths
     std::vector<std::string> mowed;
-    int tufts = 0, cards = 0, flowers = 0;
+    int tufts = 0, cards = 0;
     std::array<int, kLods> tris{};     // per level of detail, first normal object
 };
 
@@ -67,18 +63,11 @@ public:
 
 private:
     struct Strip { bool dry; float u_base, u_tip, v_start, v_end; };
-    struct Vert { float x, y, z, nx, ny, nz, u, v; };
-    struct Flower {
-        std::vector<Vert> verts;
-        std::vector<int> idx;
-        int type = 0;
-    };
     std::vector<Strip> blades_;           // colour source of the 3D blades
-    std::vector<Flower> flowers_;
     std::vector<Card> cards_;
     // card indices per kind (into cards_)
     std::vector<int> lawn_, lawn_dry_, meadow_, seed_tame_, seed_wild_, tussock_green_, tussock_dry_, moss_, sedge_,
-        dandelion_, clover_, clover_fl_, rosette_;
+        clover_, rosette_;
 };
 
 }  // namespace zg
