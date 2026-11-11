@@ -32,7 +32,7 @@ struct Settings {
     double density = 1.0;              // tuft density factor (1 = as dense as the DINKIssTyle lawn at that height)
     double dry_mix = 0.15;             // custom style only: fraction of tufts that use the dry (yellow) texture
     double width_scale = 1.0;          // extra horizontal tuft scale
-    double lod_near_m = 40.0;          // 3D blades closer than this (curved ones within 40 %), plant cards beyond
+    double lod_near_m = 40.0;          // all flowers (and real_blades) closer than this
     double lod_mid_m = 140.0;          // full plant cards closer than this; fewer, larger ones beyond
     bool real_blades = false;          // 3D blades close up (more triangles; the grass changes look near the camera)
     bool optimize_for_gpu = false;     // single-sided ATTR_no_cull meshes instead of two-sided instanced ones
