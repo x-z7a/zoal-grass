@@ -362,9 +362,9 @@ float GrassManager::tick(float /*since_last*/) {
 
 void GrassManager::discover(double lat, double lon) {
     double reach = settings_.radius_m + kActivateMarginM;
-    auto near = index_->nearby(lat, lon, reach);
+    auto candidates = index_->nearby(lat, lon, reach);
     size_t n = 0;
-    for (auto& d : near) {
+    for (auto& d : candidates) {
         if (n++ >= kMaxActiveAirports) break;
         const AirportEntry& e = *d.second;
         if (!airports_.count(e.ident) && !failed_.count(e.ident)) activate(e);
