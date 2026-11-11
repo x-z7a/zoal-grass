@@ -16,14 +16,14 @@ namespace zg {
 namespace {
 
 const char* kNormal = "zg_atlas_NRM.png";
-const char* kBuildVersion = "species-3";  // part of the object file names: bump when the geometry code changes
+const char* kBuildVersion = "species-4";  // part of the object file names: bump when the geometry code changes
 constexpr double kPi2 = 6.283185307179586;
 constexpr double kUpBias = 0.45;          // blade normals lean up this much (soft lighting, no glowing flat cards)
 constexpr double kCardUpBias = 0.78;      // card normals: lit almost like the ground they stand on
 constexpr double kDetailShare = 0.4;      // curved blades end at this share of lod_near
 constexpr double kBladeTuftsPerM2 = 27.0; // tufts of real blades per m2 at 25 cm grass
 constexpr int kMaxBladeTufts = 900;
-constexpr double kLawnCardsPerM2 = 2.0;   // Blender lawn clumps per m2 (mid level) at 25 cm grass
+constexpr double kLawnCardsPerM2 = 4.0;   // Blender lawn clumps per m2 (crossed pairs) at 25 cm grass
 constexpr int kMaxCards = 360;            // per kind
 constexpr int kMaxFlowers = 120;
 constexpr double kFlowerScale = 2.3;      // flower plant scale at 25 cm grass (the plants are ~16 cm at scale 1)
@@ -184,8 +184,12 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
     for (auto& f : flowers_)
         if (p.flower_mask & (1u << f.type)) flower_pool.push_back(&f);
 
-    const double lod_lo[kLods] = {0, p.lod_near * kDetailShare, p.lod_near, p.lod_mid};
-    const double lod_hi[kLods] = {p.lod_near * kDetailShare, p.lod_near, p.lod_mid, p.lod_far};
+    // levels: 0 [0, detail) 1 [detail, near) 2 [near, mid) 3 [mid, far); without real blades level 1 is unused and
+    // level 0 reaches lod_near (0 and 2 then differ only in how many flowers they carry)
+    const bool rb = p.real_blades;
+    const double detail = rb ? p.lod_near * kDetailShare : p.lod_near;
+    const double lod_lo[kLods] = {0, detail, p.lod_near, p.lod_mid};
+    const double lod_hi[kLods] = {detail, p.lod_near, p.lod_mid, p.lod_far};
 
     out = BuiltObjects();
     // mowed: short turf with blades, lawn clumps and the flat weeds only
@@ -350,7 +354,7 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
             // ---- blades: level 0 every tuft, half of them curved; level 1 a little over half, straight and wider
             const double bh = height;
             int nbt = int(std::lround(area * kBladeTuftsPerM2 * p.density * mx.blades / std::max(0.4, hs)));
-            nbt = std::max(mx.blades > 0.05 ? 12 : 0, std::min(kMaxBladeTufts, nbt));
+            nbt = rb ? std::max(mx.blades > 0.05 ? 12 : 0, std::min(kMaxBladeTufts, nbt)) : 0;
             {
                 auto pts = spread(nbt);
                 std::vector<double> hts(static_cast<size_t>(nbt));
@@ -385,9 +389,9 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                     lcs.push_back({U(rng) * kPi2, s * p.width_scale * (0.75 + 0.5 * U(rng)), s, U(rng) * kPi2,
                                    (U(rng) - 0.5) * 0.25, ci, U(rng) < 0.5});
                 }
-                // the same clumps close up as at 16 .. 40 m: zooming in must not change which plants grow
-                const double share[kLods] = {0.6, 0.6, 1.0, 0.5};
-                const double grow[kLods] = {1.0, 1.0, 1.0, 1.3};      // the far level: fewer, larger clumps
+                // the same clumps from 0 to lod_mid: zooming in must not change which plants grow
+                const double share[kLods] = {1.0, 1.0, 1.0, 0.35};
+                const double grow[kLods] = {1.0, 1.0, 1.0, 1.35};     // the far level: fewer, larger clumps
                 for (int L = 0; L < kLods; ++L) {
                     int nl = int(n * share[L]);
                     for (int k = 0; k < nl; ++k) {
@@ -413,16 +417,16 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
             const double ss = std::sqrt(hs);                     // hs already carries the biome height
             std::vector<Kind> kinds;
             if (!mowed) {
-                kinds.push_back({mx.meadow, &meadow_, nullptr, 0, 0.8, 1.15, 1, {1, 1, 0.7, 0.35}, 0.9});
-                kinds.push_back({mx.seed, &seed_tame_, &seed_wild_, mx.seed_wild, 0.8, 1.15, 1, {1, 1, 0.8, 0.5}, 0.8});
+                kinds.push_back({mx.meadow, &meadow_, nullptr, 0, 0.8, 1.15, 1, {1, 1, 1, 0.35}, 0.9});
+                kinds.push_back({mx.seed, &seed_tame_, &seed_wild_, mx.seed_wild, 0.8, 1.15, 1, {1, 1, 1, 0.5}, 0.8});
                 kinds.push_back({mx.tussock, &tussock_green_, &tussock_dry_, mx.tussock_dry, 0.75, 1.25, 2, {1, 1, 1, 0.6}, 1.2});
-                kinds.push_back({mx.moss, &moss_, nullptr, 0, 0.7, 1.3, 2, {1, 1, 0.6, 0}, 0.7});
-                kinds.push_back({mx.sedge, &sedge_, nullptr, 0, 0.8, 1.2, 2, {1, 1, 0.6, 0.3}, 0.6});
-                kinds.push_back({mx.dandelion, &dandelion_, nullptr, 0, 0.8, 1.2, 1, {1, 1, 0.3, 0}, 0.5});
+                kinds.push_back({mx.moss, &moss_, nullptr, 0, 0.7, 1.3, 2, {1, 1, 1, 0}, 0.7});
+                kinds.push_back({mx.sedge, &sedge_, nullptr, 0, 0.8, 1.2, 2, {1, 1, 1, 0.3}, 0.6});
+                kinds.push_back({mx.dandelion, &dandelion_, nullptr, 0, 0.8, 1.2, 1, {1, 1, 0.5, 0}, 0.5});
             }
             const double clover_k = mowed ? 0.8 : 1.0, rosette_k = mowed ? 1.2 : 1.0;
-            kinds.push_back({mx.clover * clover_k, &clover_, &clover_fl_, mx.clover_flowers, 0.8, 1.3, 0, {1, 1, 0.4, 0}, 0.4});
-            kinds.push_back({mx.rosette * rosette_k, &rosette_, nullptr, 0, 0.7, 1.3, 0, {1, 1, 0, 0}, 0.8});
+            kinds.push_back({mx.clover * clover_k, &clover_, &clover_fl_, mx.clover_flowers, 0.8, 1.3, 0, {1, 1, 0.6, 0}, 0.4});
+            kinds.push_back({mx.rosette * rosette_k, &rosette_, nullptr, 0, 0.7, 1.3, 0, {1, 1, 0.3, 0}, 0.8});
             int species_cards = 0;
             for (const Kind& kd : kinds) {
                 if (kd.pool->empty() || kd.per_m2 <= 0) continue;
@@ -442,7 +446,7 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                         const SC& c = scs[size_t(k)];
                         double x = pts[size_t(k)].first, z = pts[size_t(k)].second;
                         if (c.c->top) top_card(L, x, z, c.yaw, c.s, 0.025 + 0.004 * (k % 4), *c.c);
-                        else side_card(L, x, z, c.yaw, c.s, c.s, c.ld, c.lean, *c.c, L < 2 ? std::max(1, kd.planes_near) : 1,
+                        else side_card(L, x, z, c.yaw, c.s, c.s, c.ld, c.lean, *c.c, L < 3 ? std::max(1, kd.planes_near) : 1,
                                        c.mirror);
                     }
                 }
@@ -474,12 +478,13 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                                    std::max(-F / 2, std::min(F / 2, centres[size_t(pc)].second + std::sin(ang) * rr)),
                                    U(rng) * kPi2, kFlowerScale * hs * (0.8 + 0.4 * U(rng)), fl});
                 }
-                const double share[kLods] = {1.0, 1.0, 0.15, 0.0};   // dots beyond 40 m: a few suffice
+                const double share[kLods] = {1.0, 1.0, 0.3, 0.0};   // dots beyond lod_near: a third suffice
                 for (int L = 0; L < kLods; ++L)
                     for (int k = 0; k < int(nf * share[L]); ++k)
                         flower(L, fps[size_t(k)].x, fps[size_t(k)].z, fps[size_t(k)].yaw, fps[size_t(k)].s, *fps[size_t(k)].f);
             }
 
+            if (!rb) m.idx[1].clear();                          // level 1 only exists with real blades
             size_t total = 0;
             for (auto& v : m.idx) total += v.size();
             char name[96];
@@ -510,6 +515,7 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
             f << '\n';
             size_t offset = 0;
             for (int L = 0; L < kLods; ++L) {
+                if (!rb && L == 1) continue;
                 f << "ATTR_LOD " << int(lod_lo[L]) << ' ' << int(lod_hi[L]) << '\n';
                 if (p.gpu) f << "ATTR_no_cull\n";
                 if (!m.idx[L].empty()) f << "TRIS " << offset << ' ' << m.idx[L].size() << '\n';

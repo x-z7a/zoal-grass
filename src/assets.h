@@ -5,8 +5,10 @@
 //  - CARD: plant sprites modelled and rendered in Blender (tools/blender_species.py, tools/compose_atlas.py): lawn
 //    clumps, meadow panicles, seed-head grass, tussocks, moss, sedge, dandelions (upright cards) and clover / rosettes
 //    (flat cards)
-// Each clump is a square OBJ with four levels of detail: real blades close up, blades thinning into lawn cards, then
-// cards only. Which plants grow comes from the biome (biome.h). No .for forest is placed in the sim.
+// Each clump is a square OBJ. By default the same Blender plants grow at every distance (levels: to lod_near with all
+// flowers, to lod_mid with a few, beyond with fewer, larger clumps), so nothing changes type as the camera closes in;
+// real_blades adds 3D blades close up (four levels). Which plants grow comes from the biome (biome.h).
+// No .for forest is placed in the sim.
 #pragma once
 
 #include "biome.h"
@@ -31,6 +33,7 @@ struct LookParams {
     double flowers_per_m2 = 0.0;
     unsigned flower_mask = 0xF;
     SpeciesMix mix;
+    bool real_blades = false;   // the DINKIssTyle-coloured 3D blades close up (else Blender clumps at every distance)
     bool gpu = false;
     bool shadows = false;
     bool normal_map = true;

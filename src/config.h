@@ -34,6 +34,7 @@ struct Settings {
     double width_scale = 1.0;          // extra horizontal tuft scale
     double lod_near_m = 40.0;          // 3D blades closer than this (curved ones within 40 %), plant cards beyond
     double lod_mid_m = 140.0;          // full plant cards closer than this; fewer, larger ones beyond
+    bool real_blades = false;          // 3D blades close up (more triangles; the grass changes look near the camera)
     bool optimize_for_gpu = false;     // single-sided ATTR_no_cull meshes instead of two-sided instanced ones
     bool cast_shadows = false;
     bool normal_map = true;

@@ -3,10 +3,11 @@
 Native X-Plane 12 plugin (C++, XPLM; macOS, Windows, Linux) that grows 3D grass on unpaved ground around the
 airport you are at.
 
-- **Grass**: each 4.5 m clump is an instanced OBJ with four levels of detail. Up to 16 m (40 % of `lod_near_m`):
-  real 3D blades (tapered, leaning, drooping; in tufts of 5-9) coloured from the DINKIssTyle blade strip. To
-  `lod_near_m` (40 m): half the tufts as straight single-triangle blades, joined by lawn clumps. To `lod_mid_m`
-  (140 m): Blender lawn clumps and plant cards only. Beyond: fewer, larger cards. No `.for` forest is placed in the sim.
+- **Grass**: each 4.5 m clump is an instanced OBJ of Blender plant clumps (crossed alpha cards). The same plants grow
+  from the camera out to `lod_mid_m` (140 m), so nothing changes type as you get closer; flowers thin out beyond
+  `lod_near_m` (40 m), and beyond 140 m fewer, larger clumps stand in. `real_blades = true` (menu: Real 3D blades
+  close up) adds 3D blades coloured from the DINKIssTyle blade strip within 40 m, at about 30x the triangles there.
+  No `.for` forest is placed in the sim.
 - **Plants** (modelled in Blender, see [Art](#art)): lawn clumps in four colours, meadow grass with feathery panicles,
   timothy and wild awned seed-head grass, green and dry bunch-grass tussocks, moss cushions, sedge, dandelions with
   seed clocks, clover (with and without flowers) and dandelion / plantain rosettes, plus DINKIssTyle's 3D flower

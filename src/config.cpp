@@ -68,6 +68,7 @@ const Field kFields[] = {
     F_NUM(width_scale, "extra horizontal tuft scale (0.5 .. 2.0)"),
     F_NUM(lod_near_m, "real 3D grass blades within this camera distance, metres (cards beyond)"),
     F_NUM(lod_mid_m, "reduced-detail grass within this camera distance; sparse beyond"),
+    F_BOOL(real_blades, "add the DINKIssTyle-coloured 3D blades close up (more triangles; else the same Blender grass at every distance)"),
     F_BOOL(optimize_for_gpu, "false: two-sided meshes that X-Plane hardware-instances (CPU friendly); true: ATTR_no_cull meshes with half the triangles"),
     F_BOOL(cast_shadows, "let the grass cast shadows (costly)"),
     F_BOOL(normal_map, "use the DINKIssTyle normal map"),
@@ -175,7 +176,7 @@ bool mask_changed(const Settings& a, const Settings& b) {
 bool look_changed(const Settings& a, const Settings& b) {
     return a.style != b.style || a.biome != b.biome || a.flowers != b.flowers || a.grass_height_cm != b.grass_height_cm || a.density != b.density || a.dry_mix != b.dry_mix ||
            a.width_scale != b.width_scale || a.lod_near_m != b.lod_near_m || a.lod_mid_m != b.lod_mid_m ||
-           a.optimize_for_gpu != b.optimize_for_gpu || a.cast_shadows != b.cast_shadows ||
+           a.optimize_for_gpu != b.optimize_for_gpu || a.real_blades != b.real_blades || a.cast_shadows != b.cast_shadows ||
            a.normal_map != b.normal_map || a.spacing_m != b.spacing_m || a.radius_m != b.radius_m;
 }
 

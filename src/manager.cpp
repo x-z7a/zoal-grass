@@ -175,6 +175,7 @@ bool GrassManager::rebuild_objects() {
     p.lod_mid = settings_.lod_mid_m;
     p.lod_far = std::max(p.lod_mid + 50.0, settings_.radius_m + settings_.hysteresis_m + 150.0);
     p.gpu = settings_.optimize_for_gpu;
+    p.real_blades = settings_.real_blades;
     p.shadows = settings_.cast_shadows;
     p.normal_map = settings_.normal_map;
     BuiltObjects built;

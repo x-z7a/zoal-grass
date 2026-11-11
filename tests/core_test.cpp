@@ -119,8 +119,8 @@ int main(int argc, char** argv) {
         std::string dir = scratch + "/objs_" + st.name + "_" + kBiomes[biome].name;
         CHECK(assets.build(resources, dir, p, out, [](const std::string& m) { std::printf("  %s\n", m.c_str()); }));
         CHECK(out.normal.size() == 4 && out.mowed.size() == 4);
-        CHECK(out.tris[0] > out.tris[1] && out.tris[1] > out.tris[2] && out.tris[2] > out.tris[3] && out.tris[3] > 0);
-        CHECK(out.tris[0] < 40000);
+        CHECK(out.tris[0] >= out.tris[2] && out.tris[2] > out.tris[3] && out.tris[3] > 0 && out.tris[1] == 0);
+        CHECK(out.tris[0] < 3000);
         CHECK(out.tris[2] < 1500);                    // the 40 .. 140 m ring holds most clumps: keep it cheap
         CHECK(out.tris[3] < 600);
         std::printf("%-12s %-13s triangles per level %d/%d/%d/%d, %d plant cards\n", st.name, kBiomes[biome].name,
@@ -129,12 +129,30 @@ int main(int argc, char** argv) {
             std::string obj = read_text(out.normal[0]);
             CHECK(obj.rfind("A\n800\nOBJ\n", 0) == 0);
             CHECK(obj.find("TEXTURE " + std::string(st.texture)) != std::string::npos);
-            CHECK(obj.find("ATTR_LOD 0 16") != std::string::npos);
-            CHECK(obj.find("ATTR_LOD 16 40") != std::string::npos);
+            CHECK(obj.find("ATTR_LOD 0 40") != std::string::npos);
+            CHECK(obj.find("ATTR_LOD 40 140") != std::string::npos);
             CHECK(obj.find("ATTR_LOD 140 390") != std::string::npos);
+            CHECK(obj.find("ATTR_LOD 0 16") == std::string::npos);
             CHECK(obj.find('\r') == std::string::npos);
             CHECK(is_file(dir + "/" + st.texture));
         }
+    }
+
+    {   // real 3D blades close up: four levels
+        LookParams p;
+        p.footprint_m = 4.5;
+        p.lod_near = 40;
+        p.lod_mid = 140;
+        p.lod_far = 390;
+        p.real_blades = true;
+        p.mix = species_mix(kTemperate, "summer");
+        BuiltObjects out;
+        CHECK(assets.build(resources, scratch + "/objs_blades", p, out, [](const std::string&) {}));
+        CHECK(out.tris[0] > out.tris[1] && out.tris[1] > out.tris[2] && out.tris[0] < 40000);
+        std::string obj = read_text(out.normal[0]);
+        CHECK(obj.find("ATTR_LOD 0 16") != std::string::npos && obj.find("ATTR_LOD 16 40") != std::string::npos);
+        std::printf("real blades  temperate     triangles per level %d/%d/%d/%d\n", out.tris[0], out.tris[1], out.tris[2],
+                    out.tris[3]);
     }
 
     // ---- seasons

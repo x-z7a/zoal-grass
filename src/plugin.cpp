@@ -38,7 +38,7 @@ const double kFlowerAmounts[] = {0.0, 0.5, 1.0, 2.0};
 const char* kFlowerNames[] = {"None", "Few", "Normal (default)", "Many"};
 
 enum Item : intptr_t {
-    kEnabled = 1, kDirt, kGravel, kTurf, kDsf, kOutside, kGpu, kShadows, kNormal,
+    kEnabled = 1, kDirt, kGravel, kTurf, kDsf, kOutside, kGpu, kShadows, kNormal, kBlades,
     kReload, kSave, kStatus,
     kRadiusBase = 100, kSpacingBase = 200, kHeightBase = 300, kDensityBase = 400, kDryBase = 500,
     kStyleBase = 600,   // +0 = auto, +1.. = kStyles
@@ -80,6 +80,7 @@ void sync_menu() {
         else if (id == kGpu) on = s.optimize_for_gpu;
         else if (id == kShadows) on = s.cast_shadows;
         else if (id == kNormal) on = s.normal_map;
+        else if (id == kBlades) on = s.real_blades;
         else continue;
         XPLMCheckMenuItem(it.menu, it.index, on ? xplm_Menu_Checked : xplm_Menu_Unchecked);
     }
@@ -115,6 +116,7 @@ void menu_handler(void*, void* ref) {
         case kGpu: s.optimize_for_gpu = !s.optimize_for_gpu; break;
         case kShadows: s.cast_shadows = !s.cast_shadows; break;
         case kNormal: s.normal_map = !s.normal_map; break;
+        case kBlades: s.real_blades = !s.real_blades; break;
         case kReload: reload_settings(); sync_menu(); return;
         case kSave:
             log_line(save_settings(g_ini, s) ? "settings saved to " + g_ini : "could not save " + g_ini);
@@ -162,6 +164,7 @@ void build_menu() {
     add_item(g_menu, "Keep grass off scenery pavement polygons", kDsf);
     add_item(g_menu, "Grass outside the airport boundary", kOutside);
     XPLMAppendMenuSeparator(g_menu);
+    add_item(g_menu, "Real 3D blades close up", kBlades);
     add_item(g_menu, "Optimize for GPU (single-sided)", kGpu);
     add_item(g_menu, "Grass casts shadows", kShadows);
     add_item(g_menu, "Normal map", kNormal);
