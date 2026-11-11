@@ -1,0 +1,12 @@
+resources/climate_kg.bin is derived from the present-day (1980-2016) Koppen-Geiger climate classification map
+
+    Beck, H.E., N.E. Zimmermann, T.R. McVicar, N. Vergopolan, A. Berg, E.F. Wood:
+    Present and future Koppen-Geiger climate classification maps at 1-km resolution,
+    Nature Scientific Data 5, 180214 (2018). https://doi.org/10.1038/sdata.2018.214
+    Data: https://doi.org/10.6084/m9.figshare.6396959 (Beck_KG_V1_present_0p083.tif)
+
+licensed under the Creative Commons Attribution 4.0 International License
+(https://creativecommons.org/licenses/by/4.0/).
+
+Changes: resampled from 1/12 degree to 1/4 degree (each cell takes the most common land class of its 3 x 3 source
+cells) and run-length encoded by tools/bake_climate.py.

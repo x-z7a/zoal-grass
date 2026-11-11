@@ -14,6 +14,7 @@
 
 #include "config.h"
 #include "manager.h"
+#include "biome.h"
 #include "style.h"
 
 using namespace zg;
@@ -42,6 +43,7 @@ enum Item : intptr_t {
     kRadiusBase = 100, kSpacingBase = 200, kHeightBase = 300, kDensityBase = 400, kDryBase = 500,
     kStyleBase = 600,   // +0 = auto, +1.. = kStyles
     kFlowerBase = 700,
+    kBiomeBase = 800,   // +0 = auto, +1.. = kBiomes
 };
 
 struct MenuRef { XPLMMenuID menu; int index; intptr_t id; };
@@ -61,7 +63,8 @@ void sync_menu() {
     for (auto& it : g_items) {
         bool on = false;
         intptr_t id = it.id;
-        if (id >= kFlowerBase) on = near(s.flowers, kFlowerAmounts[id - kFlowerBase]);
+        if (id >= kBiomeBase) on = id == kBiomeBase ? s.biome == "auto" : s.biome == kBiomes[id - kBiomeBase - 1].name;
+        else if (id >= kFlowerBase) on = near(s.flowers, kFlowerAmounts[id - kFlowerBase]);
         else if (id >= kStyleBase) on = id == kStyleBase ? s.style == "auto" : s.style == kStyles[id - kStyleBase - 1].name;
         else if (id >= kDryBase) on = s.style == "custom" && near(s.dry_mix, kDry[id - kDryBase]);
         else if (id >= kDensityBase) on = near(s.density, kDensities[id - kDensityBase]);
@@ -94,7 +97,8 @@ void menu_handler(void*, void* ref) {
     if (!g_mgr) return;
     intptr_t id = reinterpret_cast<intptr_t>(ref);
     Settings s = g_mgr->settings();
-    if (id >= kFlowerBase) s.flowers = kFlowerAmounts[id - kFlowerBase];
+    if (id >= kBiomeBase) s.biome = id == kBiomeBase ? "auto" : kBiomes[id - kBiomeBase - 1].name;
+    else if (id >= kFlowerBase) s.flowers = kFlowerAmounts[id - kFlowerBase];
     else if (id >= kStyleBase) s.style = id == kStyleBase ? "auto" : kStyles[id - kStyleBase - 1].name;
     else if (id >= kDryBase) { s.dry_mix = kDry[id - kDryBase]; s.style = "custom"; }
     else if (id >= kDensityBase) s.density = kDensities[id - kDensityBase];
@@ -142,8 +146,11 @@ void build_menu() {
     const char* dn[] = {"Sparse", "Medium", "Full (default)", "Extra"};
     for (int i = 0; i < 4; ++i) add_item(m, dn[i], kDensityBase + i);
     m = sub("Season / style");
-    add_item(m, "Auto (from date and latitude)", kStyleBase);
+    add_item(m, "Auto (from date, position and climate)", kStyleBase);
     for (int i = 0; i < kStyleCount; ++i) add_item(m, kStyles[i].label, kStyleBase + 1 + i);
+    m = sub("Plants / biome");
+    add_item(m, "Auto (from the climate at your GPS position)", kBiomeBase);
+    for (int i = 0; i < kBiomeCount; ++i) add_item(m, kBiomes[i].label, kBiomeBase + 1 + i);
     m = sub("Flowers");
     for (int i = 0; i < 4; ++i) add_item(m, kFlowerNames[i], kFlowerBase + i);
     m = sub("Custom grass colour");

@@ -115,6 +115,7 @@ void GrassManager::setup() {
     snow_ref_ = XPLMFindDataRef("sim/weather/region/snow_cover");
     if (!probe_) probe_ = XPLMCreateProbe(xplm_ProbeY);
     autoshift_ = reinterpret_cast<void (*)(XPLMInstanceRef)>(XPLMFindSymbol("XPLMInstanceSetAutoShift"));
+    if (!climate_.load(resources_dir_ + "/climate_kg.bin")) log("climate map missing: plants chosen by latitude only");
     if (!assets_.load(resources_dir_, [this](const std::string& m) { log(m); })) {
         log("grass meshes missing; grass is disabled");
         settings_.enabled = false;
@@ -155,10 +156,13 @@ bool GrassManager::rebuild_objects() {
     unload_objects();
     objects_dirty_ = false;
     if (!assets_.loaded()) return false;
-    active_style_ = resolve_style(last_lat_);
+    int biome = kTemperate;
+    active_style_ = resolve_look(last_lat_, last_lon_, biome, active_koppen_);
+    active_biome_ = kBiomes[biome].name;
     const Style* st = find_style(active_style_);
     if (!st) st = find_style("summer");
     LookParams p;
+    p.mix = species_mix(biome, active_style_);
     p.height_m = settings_.grass_height_cm / 100.0 * st->height_factor;
     p.density = settings_.density;
     p.dry_mix = st->dry_mix >= 0 ? st->dry_mix : settings_.dry_mix;
@@ -198,11 +202,12 @@ bool GrassManager::rebuild_objects() {
     built_ = built;
     char buf[256];
     std::snprintf(buf, sizeof buf,
-                  "built %zu grass objects, style %s%s: %.0f cm, %d strips + %d tufts + %d flowers per %.1f m clump, "
-                  "triangles near/mid/far %d/%d/%d (%s)",
+                  "built %zu grass objects, style %s%s, %s plants (Koppen %s): %.0f cm, %d blade tufts + %d plant cards + "
+                  "%d flowers per %.1f m clump, triangles per level %d/%d/%d/%d (%s)",
                   normal_objs_.size() + mowed_objs_.size(), active_style_.c_str(),
-                  settings_.style == "auto" ? " (auto)" : "", p.height_m * 100, built.strips, built.tufts, built.flowers, p.footprint_m,
-                  built.tris_near, built.tris_mid, built.tris_far, p.gpu ? "GPU mode" : "CPU mode");
+                  settings_.style == "auto" ? " (auto)" : "", active_biome_.c_str(), koppen_symbol(active_koppen_),
+                  p.height_m * p.mix.height * 100, built.tufts, built.cards, built.flowers, p.footprint_m, built.tris[0],
+                  built.tris[1], built.tris[2], built.tris[3], p.gpu ? "GPU mode" : "CPU mode");
     log(buf);
     return !normal_objs_.empty();
 }
@@ -294,6 +299,7 @@ float GrassManager::tick(float /*since_last*/) {
     if (lat == 0.0 && lon == 0.0) return 1.0f;
     double ref_y = XPLMGetDatad(y_ref_);
     last_lat_ = lat;
+    last_lon_ = lon;
     if (t0 >= next_style_check_) {
         next_style_check_ = t0 + 5.0;
         // auto: deep snow on the ground buries the grass
@@ -306,8 +312,13 @@ float GrassManager::tick(float /*since_last*/) {
             log(buf);
             if (hide) drop_all();
         }
-        if (!objects_dirty_ && !active_style_.empty() && resolve_style(lat) != active_style_) {
-            log("season changed to " + resolve_style(lat) + " (sim date / snow cover)");
+        // a new climate (flying elsewhere) is only taken up while no airport has grass: rebuilding takes a moment,
+        // and an airport on a climate border must not flip between looks. Date and snow apply at once.
+        int biome, koppen;
+        std::string style = resolve_look(lat, lon, biome, koppen, !airports_.empty());
+        if (!objects_dirty_ && !active_style_.empty() && (style != active_style_ || active_biome_ != kBiomes[biome].name)) {
+            log("look changed to " + style + ", " + kBiomes[biome].name + " plants (Koppen " + koppen_symbol(koppen) +
+                "; sim date / snow cover / position)");
             objects_dirty_ = true;
         }
     }
@@ -638,11 +649,15 @@ void GrassManager::follow_origin() {
     origin_lon_ = lo;
 }
 
-std::string GrassManager::resolve_style(double lat) const {
+std::string GrassManager::resolve_look(double lat, double lon, int& biome, int& koppen, bool keep_climate) const {
+    koppen = keep_climate && !active_style_.empty() ? active_koppen_ : climate_.koppen(lat, lon);
+    bool auto_biome = settings_.biome == "auto";
+    biome = auto_biome ? biome_for_koppen(koppen, lat) : find_biome(settings_.biome);
+    if (biome < 0) biome = kTemperate;
     if (settings_.style != "auto") return settings_.style;
     if (snow_ref_ && XPLMGetDataf(snow_ref_) >= 0.15f) return "winter";   // snow on the ground: dormant grass
     int day = day_ref_ ? XPLMGetDatai(day_ref_) : 180;
-    return season_for(day, lat);
+    return season_for_climate(auto_biome ? koppen : typical_koppen(biome), day, lat);
 }
 
 std::string GrassManager::status() const {
@@ -659,8 +674,8 @@ std::string GrassManager::status() const {
     }
     char buf[512];
     std::snprintf(buf, sizeof buf,
-                  "style %s, %d instances, %zu queued, airports [%s], created %ld rejected %ld probe-missed %ld, plugin %.2f ms/tick (max %.1f)%s",
-                  active_style_.c_str(), count_, pending, names.c_str(), created_, rejected_, missed_, tick_ms_, tick_max_, fps);
+                  "style %s, %s plants (Koppen %s), %d instances, %zu queued, airports [%s], created %ld rejected %ld probe-missed %ld, plugin %.2f ms/tick (max %.1f)%s",
+                  active_style_.c_str(), active_biome_.c_str(), koppen_symbol(active_koppen_), count_, pending, names.c_str(), created_, rejected_, missed_, tick_ms_, tick_max_, fps);
     return buf;
 }
 

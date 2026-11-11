@@ -101,6 +101,7 @@ jobs:
             test -f "dist/zoal-grass/${platform}/zoal-grass.xpl"
           done
           test -f dist/zoal-grass/resources/grass_art.txt
+          test -f dist/zoal-grass/resources/climate_kg.bin
           test -f dist/zoal-grass/resources/textures/zg_atlas_summer.png
           test -f dist/zoal-grass/licenses/XPGrass-LICENSE.txt
           cd dist && zip -qr "zoal-grass-${version}.zip" zoal-grass

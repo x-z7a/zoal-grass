@@ -1,5 +1,5 @@
-# tools/ holds the two build-time Python scripts (bake_art.py, preview_blender.py); neither has dependencies
-# beyond the standard library (and Blender's bpy for the preview).
+# tools/ holds the build-time Python scripts: bake_art.py (standard library), compose_atlas.py and bake_climate.py
+# (Pillow, numpy), blender_species.py and preview_blender.py (Blender's bpy).
 line-length = 120
 target-version = "py310"
 
