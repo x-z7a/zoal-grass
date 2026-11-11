@@ -130,7 +130,7 @@ jobs:
           previous="$(git describe --tags --abbrev=0 "${version}^" 2>/dev/null || true)"
           {
             echo "Unzip and drop the \`zoal-grass\` folder into \`<X-Plane 12>/Resources/plugins/\`."
-            echo "Settings: **Plugins → zoal-grass → Settings…** (X-Plane 12.4.4+; older versions keep the menu)."
+            echo "Needs X-Plane 12.4.4 or newer. Settings: **Plugins → zoal-grass → Settings**."
             if [ -n "${previous}" ]; then
               echo
               echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${version}"

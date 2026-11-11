@@ -19,7 +19,7 @@ endif()
 
 option(ZOAL_GRASS_BUILD_TESTS "Build the X-Plane-free core tests" ON)
 set(ZOAL_GRASS_VERSION "dev" CACHE STRING "Version string compiled into the plugin")
-set(XPLANE_SDK_ROOT "${CMAKE_SOURCE_DIR}/.cache/sdk" CACHE PATH "X-Plane SDK root (scripts/ensure-deps.sh fetches it)")
+set(XPLANE_SDK_ROOT "${CMAKE_SOURCE_DIR}/.cache/sdk" CACHE PATH "X-Plane SDK 4.4 root (scripts/ensure-deps.sh fetches it)")
 set(XPLANE_ROOT "/Users/dzou/X-Plane 12" CACHE PATH "X-Plane folder used by the install_xplane target")
 
 if(APPLE)
@@ -89,10 +89,10 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ---------------------------------------------------------------- plugin
-if(NOT EXISTS "${XPLANE_SDK_ROOT}/CHeaders/XPLM/XPLMPlugin.h")
+if(NOT EXISTS "${XPLANE_SDK_ROOT}/CHeaders/XPLM/XPLMPanelGraphics.h")
     message(FATAL_ERROR
-        "X-Plane SDK not found at ${XPLANE_SDK_ROOT}. Run scripts/ensure-deps.sh, "
-        "or pass -DXPLANE_SDK_ROOT=/path/to/SDK.")
+        "X-Plane SDK 4.4 not found at ${XPLANE_SDK_ROOT}. Run scripts/ensure-deps.sh, "
+        "or pass -DXPLANE_SDK_ROOT=/path/to/SDK (4.4: X-Plane 12.4.4's panel graphics draw the settings window).")
 endif()
 
 # ---- the settings window: Dear ImGui (core only; X-Plane 12.4.4's panel graphics render it) with FreeType fonts,
@@ -152,7 +152,7 @@ add_library(zoal-grass MODULE src/plugin.cpp src/manager.cpp src/gui/imgui_windo
 target_link_libraries(zoal-grass PRIVATE zg_ui zoal_grass_core zg_imgui)
 target_include_directories(zoal-grass PRIVATE "${XPLANE_SDK_ROOT}/CHeaders/XPLM")
 target_compile_definitions(zoal-grass PRIVATE
-    XPLM200=1 XPLM210=1 XPLM300=1 XPLM301=1 XPLM303=1 XPLM400=1 XPLM410=1
+    XPLM200=1 XPLM210=1 XPLM300=1 XPLM301=1 XPLM302=1 XPLM303=1 XPLM400=1 XPLM410=1 XPLM420=1 XPLM430=1 XPLM440=1
     ZOAL_GRASS_VERSION="${ZOAL_GRASS_VERSION}")
 if(NOT MSVC)
     target_compile_options(zoal-grass PRIVATE -fvisibility=hidden)

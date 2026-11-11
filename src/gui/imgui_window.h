@@ -1,7 +1,6 @@
 // ImguiWindow: an X-Plane window whose contents are a Dear ImGui frame, rendered natively by X-Plane's panel-graphics
-// ImGui helpers (SDK 4.4, X-Plane 12.4.4). From zoal-atc (src/xplane/imgui_window.*), with one difference: the seven
-// SDK 4.4 calls are looked up at run time (XPLMFindSymbol) and the plugin builds against SDK 4.1, so the grass still
-// loads on an older X-Plane -- there, available() is false and the plugin keeps its classic menu.
+// ImGui helpers (SDK 4.4, X-Plane 12.4.4): textures through XPLMCreateTexture, draw lists through XPLMDrawCalls -- no
+// OpenGL. From zoal-atc (src/xplane/imgui_window.*).
 #pragma once
 
 #include <XPLMDisplay.h>
@@ -24,9 +23,6 @@ public:
         int min_width = 0;
         int min_height = 0;
     };
-
-    // True when this X-Plane draws panel-graphics windows (12.4.4 and newer).
-    static bool available();
 
     // Created hidden, at the given global boxel rectangle (y up).
     ImguiWindow(int left, int top, int right, int bottom, BuildFn build, Options options);

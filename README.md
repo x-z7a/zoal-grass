@@ -1,7 +1,7 @@
 # zoal-grass
 
-Native X-Plane 12 plugin (C++, XPLM; macOS, Windows, Linux) that grows 3D grass on unpaved ground around the
-airport you are at.
+Native X-Plane 12 plugin (C++, XPLM SDK 4.4; macOS, Windows, Linux) that grows 3D grass on unpaved ground around the
+airport you are at. Needs **X-Plane 12.4.4 or newer**.
 
 - **Grass**: each 4.5 m clump is an instanced OBJ of Blender plant clumps (crossed alpha cards). The same plants at the
   same density grow from the camera to the edge of the grass (one level of detail, about 860 triangles per clump), so
@@ -96,8 +96,8 @@ zoal-grass/
 
 ## Settings window
 
-**Plugins > zoal-grass > Settings…** (or the `zoal-grass/settings` command) opens a window with every setting,
-in five tabs:
+**Plugins > zoal-grass > Settings** (or the `zoal-grass/settings` command) shows and hides a window with every
+setting, the on / off switch included, in five tabs:
 
 | tab | what |
 |---|---|
@@ -109,17 +109,17 @@ in five tabs:
 
 The header shows what is growing (season, plants, Koppen climate, clumps) and the on / off switch. Changes apply as
 you make them (a slider when you let go); **Save** writes `zoal-grass/zoal-grass.ini`, **Reload** reads it back.
-It is drawn with Dear ImGui by X-Plane's panel graphics, in zoal-atc's look (Inter, the same palettes and controls),
-and needs **X-Plane 12.4.4 or newer**; on an older X-Plane the plugin still loads and keeps the full menu.
+It is drawn with Dear ImGui by X-Plane 12.4.4's panel graphics (`XPLMCreateTexture` / `XPLMDrawCalls`, no OpenGL),
+in zoal-atc's look (Inter, the same palettes and controls).
 
-Settings also live in `zoal-grass/zoal-grass.ini` (written on first start). Commands: `zoal-grass/settings`,
-`zoal-grass/toggle`, `zoal-grass/reload`. Log lines start with `zoal-grass:` in `Log.txt`. Generated objects go to
+Settings also live in `zoal-grass/zoal-grass.ini` (written on first start). Commands: `zoal-grass/settings` (the
+window), `zoal-grass/toggle` (grass on / off, for a key binding), `zoal-grass/reload` (re-read the ini). Log lines start with `zoal-grass:` in `Log.txt`. Generated objects go to
 `zoal-grass/cache/` and are rebuilt when look settings change.
 
 ## Build
 
 ```sh
-scripts/ensure-deps.sh                     # X-Plane SDK 410, Dear ImGui, FreeType, Inter into .cache (pinned, checked)
+scripts/ensure-deps.sh                     # X-Plane SDK 4.4, Dear ImGui, FreeType, Inter into .cache (pinned, checked)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release       # -> build/<platform>/zoal-grass.xpl
 ctest --test-dir build -C Release          # X-Plane-free core tests
@@ -129,8 +129,7 @@ cmake --build build --target install_xplane -- # macOS dev loop: -DXPLANE_ROOT=.
 The settings window can be checked without X-Plane: configure with `-DZOAL_GRASS_BUILD_PREVIEW=ON`, then
 `build/settings_preview .cache/inter-v4.1 out.ppm <tab 0-4> <graphite|daylight|night> 780 680 1.5` renders it
 (software rasteriser from zoal-atc's `tools/panel_preview.cpp`). The window code (`src/gui/`) comes from zoal-atc:
-`imgui_window` (the X-Plane host; its SDK 4.4 calls are looked up at run time), `kit` and the palettes and controls
-in `settings_view`.
+`imgui_window` (the X-Plane host), `kit` and the palettes and controls in `settings_view`.
 
 The public-domain 7-Zip C decoder is vendored at a pinned revision in `third_party/7zip/` (see
 `licenses/7zip-NOTICE.txt`); no external 7z executable is required. Core tests include synthetic scenery stacks,

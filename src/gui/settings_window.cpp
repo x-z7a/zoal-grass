@@ -88,10 +88,8 @@ float tick(float, float, int, void*) {
 
 }  // namespace
 
-bool settings_window_supported() { return ImguiWindow::available(); }
-
 bool start_settings_window(SettingsHost host) {
-    if (w || !ImguiWindow::available()) return false;
+    if (w) return false;
     w = std::make_unique<Window>();
     w->view.host = std::move(host);
     ImguiWindow::Options options;
@@ -101,7 +99,7 @@ bool start_settings_window(SettingsHost host) {
     options.min_height = kMinHeight;
     w->window = std::make_unique<ImguiWindow>(0, kOpenHeight, kOpenWidth, 0, build, options);
     if (!w->window->valid()) {
-        if (w->view.host.log) w->view.host.log("X-Plane did not create the settings window; keeping the classic menu");
+        if (w->view.host.log) w->view.host.log("X-Plane did not create the settings window (it needs X-Plane 12.4.4 or newer)");
         w.reset();
         return false;
     }

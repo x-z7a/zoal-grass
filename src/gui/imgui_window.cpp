@@ -1,8 +1,8 @@
-// From zoal-atc src/xplane/imgui_window.cpp; the SDK 4.4 calls go through pg() (see imgui_window.h).
+// From zoal-atc (src/xplane/imgui_window.cpp): X-Plane 12.4.4's panel graphics draw the ImGui frame.
 #include "gui/imgui_window.h"
 
+#include <XPLMPanelGraphics.h>
 #include <XPLMProcessing.h>
-#include <XPLMUtilities.h>
 
 #include <cfloat>
 #include <cstdint>
@@ -22,61 +22,6 @@ static_assert(sizeof(ImDrawIdx) == sizeof(std::uint16_t),
               "XPLMMesh_t wants 16-bit indices; keep ImDrawIdx at its default");
 
 namespace {
-
-// --- the SDK 4.4 pieces, declared here and found at run time -------------------------------------------------
-// (XPLMPanelGraphics.h and XPLMDisplay.h of SDK 4.4.0; the plugin builds against SDK 4.1 and must load on older
-// X-Plane, where these symbols do not exist.)
-struct XPLMDrawCall_t {
-  void *tex_ref;
-  float scissors[4];
-  int idx_offset;
-  int element_count;
-  int vtx_offset;
-};
-struct XPLMMesh_t {
-  int vertex_count;
-  const float *vertices;
-  int index_count;
-  const std::uint16_t *indices;
-};
-// XPLMCreateWindow_t as SDK 4.4 extends it: the content type and two browser callbacks after the 4.1 fields.
-struct CreateWindow440 {
-  XPLMCreateWindow_t base;
-  int contentType;
-  void *browserLoadFinishedFunc;
-  void *browserLoadErrorFunc;
-};
-constexpr int kContentTypePanelGraphics = 1;   // xplm_WindowContentTypePanelGraphics
-constexpr int kCursorButton = 19, kCursorFourArrows = 21, kCursorText = 24;   // XPLMDefs.h, SDK 4.4
-
-struct PanelGraphics {
-  void *(*create_texture)(const unsigned char *, int, int) = nullptr;
-  void (*destroy_texture)(void *) = nullptr;
-  void (*draw_calls)(const XPLMMesh_t *, int, const XPLMDrawCall_t[]) = nullptr;
-  void (*transform_push)() = nullptr;
-  void (*transform_pop)() = nullptr;
-  void (*transform_translate)(float, float) = nullptr;
-  void (*transform_scale)(float, float) = nullptr;
-  bool ok = false;
-
-  PanelGraphics() {
-    auto find = [](const char *name) { return XPLMFindSymbol(name); };
-    create_texture = reinterpret_cast<decltype(create_texture)>(find("XPLMCreateTexture"));
-    destroy_texture = reinterpret_cast<decltype(destroy_texture)>(find("XPLMDestroyTexture"));
-    draw_calls = reinterpret_cast<decltype(draw_calls)>(find("XPLMDrawCalls"));
-    transform_push = reinterpret_cast<decltype(transform_push)>(find("XPLMTransformPush"));
-    transform_pop = reinterpret_cast<decltype(transform_pop)>(find("XPLMTransformPop"));
-    transform_translate = reinterpret_cast<decltype(transform_translate)>(find("XPLMTransformTranslate"));
-    transform_scale = reinterpret_cast<decltype(transform_scale)>(find("XPLMTransformScale"));
-    ok = create_texture && destroy_texture && draw_calls && transform_push && transform_pop &&
-         transform_translate && transform_scale;
-  }
-};
-
-const PanelGraphics &pg() {
-  static const PanelGraphics api;
-  return api;
-}
 
 void *texture_handle(ImTextureID id) {
   return reinterpret_cast<void *>(static_cast<std::uintptr_t>(id));
@@ -104,8 +49,6 @@ private:
 
 } // namespace
 
-bool ImguiWindow::available() { return pg().ok; }
-
 ImguiWindow::ImguiWindow(int left, int top, int right, int bottom,
                          BuildFn build, Options options)
     : build_(std::move(build)), options_(options) {
@@ -128,12 +71,8 @@ ImguiWindow::ImguiWindow(int left, int top, int right, int bottom,
     io.ConfigInputTrickleEventQueue = true;
   }
 
-  if (!pg().ok) {
-    return;   // X-Plane older than 12.4.4: no panel-graphics windows (valid() stays false)
-  }
-  CreateWindow440 ext = {};
-  XPLMCreateWindow_t &params = ext.base;
-  params.structSize = sizeof(ext);
+  XPLMCreateWindow_t params = {};
+  params.structSize = sizeof(params);
   params.left = left;
   params.top = top;
   params.right = right;
@@ -151,7 +90,7 @@ ImguiWindow::ImguiWindow(int left, int top, int right, int bottom,
       options_.resizable ? xplm_WindowDecorationSelfDecoratedResizable
                          : xplm_WindowDecorationSelfDecorated;
   params.layer = xplm_WindowLayerFloatingWindows;
-  ext.contentType = kContentTypePanelGraphics;
+  params.contentType = xplm_WindowContentTypePanelGraphics;
   window_ = XPLMCreateWindowEx(&params);
   if (window_ && options_.resizable) {
     XPLMSetWindowResizingLimits(window_, options_.min_width, options_.min_height,
@@ -255,11 +194,11 @@ void ImguiWindow::key_cb(XPLMWindowID, char key, XPLMKeyFlags flags,
 XPLMCursorStatus ImguiWindow::cursor_cb(XPLMWindowID, int, int, void *refcon) {
   switch (static_cast<ImguiWindow *>(refcon)->cursor_) {
   case ImGuiMouseCursor_TextInput:
-    return static_cast<XPLMCursorStatus>(kCursorText);
+    return xplm_CursorText;
   case ImGuiMouseCursor_Hand:
-    return static_cast<XPLMCursorStatus>(kCursorButton);
+    return xplm_CursorButton;
   case ImGuiMouseCursor_ResizeAll:
-    return static_cast<XPLMCursorStatus>(kCursorFourArrows);
+    return xplm_CursorFourArrows;
   default:
     break;
   }
@@ -464,9 +403,9 @@ void ImguiWindow::draw() {
   // Panel graphics draws in global boxels, y up; ImGui's buffers are
   // window-local, y down. The transform does the whole conversion -- vertices
   // and clip rects are handed over untouched (XPLMPanelGraphics.h).
-  pg().transform_push();
-  pg().transform_translate(static_cast<float>(left), static_cast<float>(top));
-  pg().transform_scale(1.0f, -1.0f);
+  XPLMTransformPush();
+  XPLMTransformTranslate(static_cast<float>(left), static_cast<float>(top));
+  XPLMTransformScale(1.0f, -1.0f);
 
   std::vector<XPLMDrawCall_t> calls;
   for (const ImDrawList *list : data->CmdLists) {
@@ -494,10 +433,10 @@ void ImguiWindow::draw() {
     mesh.vertices = reinterpret_cast<const float *>(list->VtxBuffer.Data);
     mesh.index_count = list->IdxBuffer.Size;
     mesh.indices = list->IdxBuffer.Data;
-    pg().draw_calls(&mesh, static_cast<int>(calls.size()), calls.data());
+    XPLMDrawCalls(&mesh, static_cast<int>(calls.size()), calls.data());
   }
 
-  pg().transform_pop();
+  XPLMTransformPop();
 }
 
 // --- textures ---------------------------------------------------------------
@@ -510,9 +449,9 @@ void ImguiWindow::update_texture(ImTextureData *texture) {
   if (texture->Status == ImTextureStatus_WantCreate ||
       texture->Status == ImTextureStatus_WantUpdates) {
     if (texture->TexID != ImTextureID_Invalid) {
-      pg().destroy_texture(texture_handle(texture->TexID));
+      XPLMDestroyTexture(texture_handle(texture->TexID));
     }
-    void *handle = pg().create_texture(
+    void *handle = XPLMCreateTexture(
         static_cast<const unsigned char *>(texture->GetPixels()),
         texture->Width, texture->Height);
     texture->SetTexID(texture_id(handle));
@@ -520,7 +459,7 @@ void ImguiWindow::update_texture(ImTextureData *texture) {
   } else if (texture->Status == ImTextureStatus_WantDestroy &&
              texture->UnusedFrames > 0) {
     if (texture->TexID != ImTextureID_Invalid) {
-      pg().destroy_texture(texture_handle(texture->TexID));
+      XPLMDestroyTexture(texture_handle(texture->TexID));
     }
     texture->SetTexID(ImTextureID_Invalid);
     texture->SetStatus(ImTextureStatus_Destroyed);
@@ -531,7 +470,7 @@ void ImguiWindow::destroy_textures() {
   ContextScope scope(context_);
   for (ImTextureData *texture : ImGui::GetPlatformIO().Textures) {
     if (texture->RefCount == 1 && texture->TexID != ImTextureID_Invalid) {
-      pg().destroy_texture(texture_handle(texture->TexID));
+      XPLMDestroyTexture(texture_handle(texture->TexID));
       texture->SetTexID(ImTextureID_Invalid);
       texture->SetStatus(ImTextureStatus_Destroyed);
     }

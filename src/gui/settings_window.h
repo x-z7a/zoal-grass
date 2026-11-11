@@ -1,6 +1,6 @@
 // The settings window: every zoal-grass setting, organised in tabs, drawn with zoal-atc's look (Inter, the
-// Graphite / Daylight / Night palettes, glass, pills). Needs X-Plane 12.4.4 (panel graphics); on an older X-Plane
-// start_settings_window returns false and the plugin keeps its classic menu.
+// Graphite / Daylight / Night palettes, glass, pills) through X-Plane 12.4.4's panel graphics. Plugins > zoal-grass >
+// Settings (or the zoal-grass/settings command) shows and hides it.
 #pragma once
 
 #include <functional>
@@ -29,8 +29,7 @@ struct SettingsHost {
     std::function<void(const std::string&)> log;
 };
 
-bool settings_window_supported();
-bool start_settings_window(SettingsHost host);   // false: no panel-graphics windows here
+bool start_settings_window(SettingsHost host);   // false: X-Plane did not create the window
 void stop_settings_window();
 void show_settings_window(bool show);
 void toggle_settings_window();
