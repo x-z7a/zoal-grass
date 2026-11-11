@@ -5,6 +5,7 @@
 //  - the grass objects build for every style and biome, are well-formed OBJ8 files and stay in the triangle budget
 //  - the season mapping follows the hemisphere and the climate
 //  - the Koppen climate grid gives the right climate for known airports (and for coastal ones in a water cell)
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -13,6 +14,7 @@
 #include <string>
 
 #include "apt.h"
+#include "geo.h"
 #include "assets.h"
 #include "biome.h"
 #include "http.h"
@@ -20,6 +22,7 @@
 #include "osm.h"
 #include "platform.h"
 #include "style.h"
+#include "wind.h"
 
 using namespace zg;
 
@@ -207,6 +210,52 @@ int main(int argc, char** argv) {
                     out.tris[3]);
     }
 
+    // ---- wind sway: the maths and the animated objects
+    {
+        float v[2 * kSwayGroups];
+        sway_values(0.1, 0.0, 3.0, 10, 20, 0, 7, 0.3, v);
+        bool calm = true;
+        for (float f : v) calm &= f == 0.0f;
+        CHECK(calm);
+        for (double hd : {0.0, 90.0}) {
+            double mean_z = 0, mean_x = 0, peak = 0;
+            for (int k = 0; k < 400; ++k) {
+                sway_values(10.0, 0.0, k * 0.05, 3.0, -2.0, hd, 7.0, 0.4, v);   // 10 m/s blowing east
+                mean_z += v[0] / 400;
+                mean_x += v[kSwayGroups] / 400;
+                for (float f : v) peak = std::max(peak, double(std::fabs(f)));
+            }
+            if (hd == 0.0) CHECK(mean_z < -1.0 && std::fabs(mean_x) < 1e-6);   // leans toward +x (east)
+            else CHECK(mean_x < -1.0 && std::fabs(mean_z) < 1e-6);             // heading 90: east is the clump's -z
+            CHECK(peak <= 7.0 * 1.2);
+        }
+        LookParams p;
+        p.footprint_m = 4.5;
+        p.lod_near = 40;
+        p.lod_mid = 140;
+        p.lod_far = 390;
+        p.sway = true;
+        p.mix = species_mix(kTemperate, "summer");
+        BuiltObjects out;
+        CHECK(assets.build(resources, scratch + "/objs_sway", p, out, [](const std::string&) {}));
+        std::string obj = read_text(out.normal[0]);
+        CHECK(obj.find("ANIM_begin") != std::string::npos && obj.find("ANIM_end") != std::string::npos);
+        CHECK(obj.find("ANIM_rotate 0 0 1 -45 45 -45 45 zoal/grass/sway_x") != std::string::npos);
+        size_t far = obj.find("ATTR_LOD 40 390");
+        CHECK(obj.find("ATTR_LOD 0 40") != std::string::npos && far != std::string::npos);
+        long near_tris = 0, far_tris = 0;   // the animated near level and the still far level carry the same triangles
+        for (size_t q = obj.find("\nTRIS "); q != std::string::npos; q = obj.find("\nTRIS ", q + 1)) {
+            long first = 0, count = 0;
+            std::sscanf(obj.c_str() + q + 6, "%ld %ld", &first, &count);
+            (q < far ? near_tris : far_tris) += count;
+        }
+        CHECK(near_tris > 0 && near_tris == far_tris);
+        size_t groups = 0;
+        for (size_t q = obj.find("ANIM_begin"); q != std::string::npos; q = obj.find("ANIM_begin", q + 1)) ++groups;
+        CHECK(groups > 10);
+        std::printf("wind sway: %ld near triangles, %zu animated groups\n", near_tris, groups);
+    }
+
     {   // width/height and distant LODs can exceed the nominal grid footprint significantly
         LookParams p;
         p.real_blades = true;
@@ -217,6 +266,20 @@ int main(int argc, char** argv) {
         CHECK(assets.build(resources, scratch + "/objs_wide", p, wide, [](const std::string&) {}));
         check_footprint(wide);
         CHECK(wide.clearance_m > p.footprint_m);
+    }
+
+    // ---- standing a clump on the terrain slope: the angles rebuild the terrain normal for every heading
+    for (double hd : {0.0, 90.0, 180.0, 270.0, 37.0}) {
+        const double ns[][3] = {{0.0, 1.0, 0.0}, {0.1, 0.99, 0.0}, {0.0, 0.98, -0.2}, {-0.15, 0.97, 0.18}};
+        for (auto& n0 : ns) {
+            double m = std::sqrt(n0[0] * n0[0] + n0[1] * n0[1] + n0[2] * n0[2]);
+            double nx = n0[0] / m, ny = n0[1] / m, nz = n0[2] / m, pd, rd;
+            terrain_tilt(nx, ny, nz, hd, pd, rd);
+            double p = pd * 3.14159265358979 / 180, r = rd * 3.14159265358979 / 180, h = hd * 3.14159265358979 / 180;
+            double ux = std::sin(r), uy = std::cos(r) * std::cos(p), uz = std::cos(r) * std::sin(p);   // heading frame
+            double wx = ux * std::cos(h) - uz * std::sin(h), wz = ux * std::sin(h) + uz * std::cos(h);  // Ry(-heading)
+            CHECK(std::fabs(wx - nx) < 1e-6 && std::fabs(uy - ny) < 1e-6 && std::fabs(wz - nz) < 1e-6);
+        }
     }
 
     // ---- seasons

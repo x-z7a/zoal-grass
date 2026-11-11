@@ -696,6 +696,9 @@ void tab_placement(Flow& f, const Settings& s) {
     switch_row(f, "outside", "Outside the airport boundary",
                "Grow grass up to the radius beyond the airport's boundary, not just inside it.",
                s.grass_outside_airport, [](Settings& st, bool v) { st.grass_outside_airport = v; });
+    switch_row(f, "tilt", "Follow the terrain slope",
+               "Tilt each clump to the ground's slope, so its ground cover stays just above the terrain.",
+               s.terrain_tilt, [](Settings& st, bool v) { st.terrain_tilt = v; });
     slider_row(f, "slope", "Steepest slope", "No grass on terrain steeper than this.", s.max_slope_deg, 1, 60, 1,
                [](double v) { return fmt("%.0f\xC2\xB0", v); }, [](Settings& st, double v) { st.max_slope_deg = v; });
 
@@ -749,12 +752,22 @@ void tab_rendering(Flow& f, const Settings& s) {
                "Adds individual 3D blades near the camera. About 20 times the triangles there, and the grass changes "
                "look as you come closer.",
                s.real_blades, [](Settings& st, bool v) { st.real_blades = v; });
-    slider_row(f, "near", "3D blades within", "Real blades only: how far from the camera they are drawn.", s.lod_near_m,
-               10, 300, 5, [](double v) { return fmt("%.0f m", v); },
-               [](Settings& st, double v) { st.lod_near_m = v; }, s.real_blades);
+    slider_row(f, "near", "Close-up distance", "How far from the camera real 3D blades are drawn, and grass sways in "
+                                               "the wind.",
+               s.lod_near_m, 10, 300, 5, [](double v) { return fmt("%.0f m", v); },
+               [](Settings& st, double v) { st.lod_near_m = v; }, s.real_blades || s.wind_sway);
     slider_row(f, "mid", "Full detail within", "Real blades only: beyond this, fewer and larger clumps stand in.",
                s.lod_mid_m, std::min(1000.0, s.lod_near_m + 10), 1000, 10, [](double v) { return fmt("%.0f m", v); },
                [](Settings& st, double v) { st.lod_mid_m = v; }, s.real_blades);
+
+    f.section("Wind");
+    switch_row(f, "wind", "Grass sways in the wind",
+               "Experimental: grass within the close-up distance leans downwind and moves in gusts, from the sim's "
+               "wind. Each 0.75 m patch tilts as a whole. Watch your FPS with it on.",
+               s.wind_sway, [](Settings& st, bool v) { st.wind_sway = v; });
+    slider_row(f, "winddeg", "Lean in a strong wind", "How far the grass leans in about 27 kt of wind.", s.wind_sway_deg,
+               1, 20, 1, [](double v) { return fmt("%.0f\xC2\xB0", v); },
+               [](Settings& st, double v) { st.wind_sway_deg = v; }, s.wind_sway);
 
     f.section("Graphics");
     switch_row(f, "gpu", "Optimize for GPU", "Single-sided meshes with culling turned off: half the triangles, but "

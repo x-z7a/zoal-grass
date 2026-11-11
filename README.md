@@ -11,6 +11,12 @@ airport you are at. Needs **X-Plane 12.4.4 or newer**.
   `.for` forest.
 - **Seen from above**: each lawn clump has a flat ground-cover card under it, the same clump rendered from above, so
   the field stays full of grass from high and overhead views where upright cards are edge-on (2 triangles each).
+- **Wind** (experimental, off by default: `wind_sway = true`, Settings > Rendering > Wind): within `lod_near_m`
+  (40 m) the plant cards tilt in 0.75 m groups about their foot, driven by the sim's wind
+  (`sim/weather/aircraft/wind_now_*`): a lean downwind of up to `wind_sway_deg` (7) in a strong wind plus gusts that
+  run across the field. X-Plane objects cannot bend, so each group tilts as a whole; the flat ground cover stays put.
+  The clumps near the camera are updated every frame (instance datarefs `zoal/grass/sway_x0..3`, `sway_z0..3`);
+  beyond 40 m the same geometry is drawn still. Watch your FPS with it on.
 - **Plants** (modelled in Blender, see [Art](#art)): lawn clumps in four colours (side and top views), meadow grass with feathery panicles,
   timothy and wild awned seed-head grass, green and dry bunch-grass tussocks, moss cushions, sedge, clover and
   dandelion / plantain rosettes. They grow in drifts, and every clump variant leans to one lawn colour, so fields look patchy, not tiled.
@@ -102,9 +108,9 @@ setting, the on / off switch included, in five tabs:
 | tab | what |
 |---|---|
 | Look | season and plants (auto or picked), dry grass (custom season), height, density, width |
-| Placement | radius, clump spacing, grass outside the boundary, steepest slope; grass on dirt / gravel / turf, pavement clearance |
+| Placement | radius, clump spacing, grass outside the boundary, following the terrain slope, steepest slope; grass on dirt / gravel / turf, pavement clearance |
 | Clearance | scenery roads and buildings, the always / never pavement word lists; OpenStreetMap roads, the Overpass server, how long downloads are kept |
-| Rendering | real 3D blades and their distances, GPU mode, shadows, normal map, how far beyond the radius grass is removed |
+| Rendering | real 3D blades and the close-up distance, wind sway and its lean, GPU mode, shadows, normal map, how far beyond the radius grass is removed |
 | Advanced | theme (Graphite, Daylight, Night), the airport area margins, mask resolution, status logging, reset to defaults |
 
 The header shows what is growing (season, plants, Koppen climate, clumps) and the on / off switch. Changes apply as

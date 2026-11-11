@@ -4,8 +4,8 @@ blender -b --factory-startup -P tools/preview_blender.py -- <dir with zg_*.obj> 
 
 Reads the X-Plane OBJ8 files the plugin writes (VT / IDX / TRIS per ATTR_LOD, TEXTURE), lays clumps out on the same grid
 the plugin uses (quarter-turn rotations), gives every clump the level of detail X-Plane would pick for the camera, and
-renders eye-level, close, low aerial and high oblique views with Cycles: <out prefix>_eye.png, _close.png,
-_air.png, _high.png.
+renders eye-level, close, low aerial, high oblique and straight-down views with Cycles: <out prefix>_eye.png,
+_close.png, _air.png, _high.png, _top.png.
 """
 import glob
 import math
@@ -23,7 +23,7 @@ GRID = int(argv[3]) if len(argv) > 3 else 9
 
 
 def read_obj8(path):
-    verts, idx, lods, tex = [], [], [], None      # lods: [lo, hi, first, count]
+    verts, idx, lods, tex = [], [], [], None      # lods: [lo, hi, [(first, count), ...]] (ANIM groups: several)
     for line in open(path):
         t = line.split()
         if not t:
@@ -35,18 +35,19 @@ def read_obj8(path):
         elif t[0] in ("IDX", "IDX10"):
             idx += [int(v) for v in t[1:]]
         elif t[0] == "ATTR_LOD":
-            lods.append([float(t[1]), float(t[2]), 0, 0])
+            lods.append([float(t[1]), float(t[2]), []])
         elif t[0] == "TRIS":
-            lods[-1][2:] = [int(t[1]), int(t[2])]
+            lods[-1][2].append((int(t[1]), int(t[2])))   # wind-sway groups are drawn upright here
     return verts, idx, lods, tex
 
 
-def make_mesh(name, verts, idx, first, count):
-    used = sorted(set(idx[first:first + count]))
+def make_mesh(name, verts, idx, ranges):
+    sel = [i for first, count in ranges for i in idx[first:first + count]]
+    used = sorted(set(sel))
     remap = {v: n for n, v in enumerate(used)}
     # X-Plane: x east, y up, z south  ->  Blender: x east, y north, z up
     co = [(verts[v][0], -verts[v][2], verts[v][1]) for v in used]
-    faces = [tuple(remap[idx[k + j]] for j in range(3)) for k in range(first, first + count, 3)]
+    faces = [tuple(remap[sel[k + j]] for j in range(3)) for k in range(0, len(sel), 3)]
     me = bpy.data.meshes.new(name)
     me.from_pydata(co, [], faces)
     uv = me.uv_layers.new()
@@ -143,8 +144,8 @@ for path in paths:
     if mat is None:
         mat = material(os.path.join(SRC, tex))
     per = []
-    for n, (lo, hi, first, count) in enumerate(lods):
-        me = make_mesh("%s_%d" % (os.path.basename(path), n), verts, idx, first, count)
+    for n, (lo, hi, ranges) in enumerate(lods):
+        me = make_mesh("%s_%d" % (os.path.basename(path), n), verts, idx, ranges)
         me.materials.append(mat)
         per.append((lo, hi, me))
     meshes.append(per)
@@ -164,7 +165,7 @@ def place(eye):
         for j in range(-half, half + 1):
             var = meshes[rng.randrange(len(meshes))]
             rot = rng.randrange(4)
-            loc = Vector((i * SPACING, j * SPACING, 0.0))       # on the terrain, as X-Plane places them
+            loc = Vector((i * SPACING, j * SPACING, -0.03))     # sunk 3 cm into the terrain, as X-Plane places them
             d = (loc - Vector(eye)).length
             me = next((m for lo, hi, m in var if lo <= d < hi), None)
             if me is None:
@@ -193,3 +194,4 @@ shoot("eye", (0, -extent + 6.0, 1.7), (0, 0, 0.0), 35)
 shoot("close", (0, -extent + 10.0, 0.6), (0, -extent + 14.0, 0.1), 35)
 shoot("air", (-extent * 0.3, -extent - 8.0, 15.0), (0, extent * 0.2, 0), 35)
 shoot("high", (0, -extent * 0.6, 45.0), (0, extent * 0.1, 0), 35)        # high oblique: the canopy cards
+shoot("top", (0, 0, 30.0), (0, 0.01, 0), 35)                              # straight down
