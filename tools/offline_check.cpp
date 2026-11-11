@@ -4,6 +4,7 @@
 #include <fstream>
 #include "apt.h"
 #include "assets.h"
+#include "biome.h"
 #include "dsf.h"
 #include "mask.h"
 #include "style.h"
@@ -45,14 +46,19 @@ int main(int argc, char** argv) {
     }
     GrassAssets a;
     if (!a.load(argv[4], log)) return 1;
+    ClimateMap climate;
+    climate.load(std::string(argv[4]) + "/climate_kg.bin");
+    int koppen = climate.koppen(e->lat, e->lon), biome = biome_for_koppen(koppen, e->lat);
+    std::printf("%s climate: Koppen %s, %s plants\n", e->ident.c_str(), koppen_symbol(koppen), kBiomes[biome].name);
     for (const Style& st : kStyles) {
         LookParams p; p.footprint_m = 4.5; p.lod_far = 390; p.lod_near = 40; p.lod_mid = 140;
+        p.mix = species_mix(biome, st.name);
         p.height_m = 0.25 * st.height_factor; p.dry_mix = st.dry_mix >= 0 ? st.dry_mix : 0.15;
         p.texture = st.texture; p.flowers_per_m2 = st.flowers_per_m2; p.flower_mask = st.flower_mask;
         BuiltObjects bo;
         if (!a.build(argv[4], std::string(argv[3]) + "/objs_" + st.name, p, bo, log)) return 1;
-        std::printf("%-12s objects %zu+%zu, strips %d tufts %d flowers %d, tris %d/%d/%d\n", st.name, bo.normal.size(), bo.mowed.size(),
-                    bo.strips, bo.tufts, bo.flowers, bo.tris_near, bo.tris_mid, bo.tris_far);
+        std::printf("%-12s objects %zu+%zu, tufts %d cards %d flowers %d, tris %d/%d/%d/%d\n", st.name, bo.normal.size(),
+                    bo.mowed.size(), bo.tufts, bo.cards, bo.flowers, bo.tris[0], bo.tris[1], bo.tris[2], bo.tris[3]);
     }
     const char* when[] = {"Jan 15", "Apr 15", "Jul 1", "Sep 1", "Oct 20", "Dec 20"};
     int days[] = {14, 104, 181, 243, 292, 353};

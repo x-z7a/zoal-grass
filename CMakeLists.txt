@@ -36,6 +36,7 @@ endif()
 add_library(zoal_grass_core STATIC
     src/apt.cpp
     src/assets.cpp
+    src/biome.cpp
     src/config.cpp
     src/dsf.cpp
     src/mask.cpp

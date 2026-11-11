@@ -3,10 +3,18 @@
 Native X-Plane 12 plugin (C++, XPLM; macOS, Windows, Linux) that grows 3D grass on unpaved ground around the
 airport you are at.
 
-- **Grass**: each 4.5 m clump is an instanced OBJ with three levels of detail, all made of real 3D blades (tapered,
-  leaning, drooping; in tufts of 5-9) coloured from the DINKIssTyle blade strip, plus DINKIssTyle's 3D flower plants:
-  near (`lod_near_m`, 40 m) every tuft; mid (`lod_mid_m`, 140 m) half of them with wider single-triangle blades;
-  far a sparse set, wider still. No `.for` forest is placed in the sim.
+- **Grass**: each 4.5 m clump is an instanced OBJ of Blender plant clumps (crossed alpha cards). The same plants at the
+  same density grow from the camera to the edge of the grass, so nothing changes type or thins out as you get closer
+  or zoom (X-Plane scales level-of-detail distances with the zoom); only the flowers thin to 60 % beyond `lod_near_m`
+  (40 m). `real_blades = true` (menu: Real 3D blades close up) adds 3D blades coloured from the DINKIssTyle blade
+  strip within 40 m (about 10x the triangles there) and a sparser level beyond `lod_mid_m`. No `.for` forest is
+  placed in the sim.
+- **Plants** (modelled in Blender, see [Art](#art)): lawn clumps in four colours, meadow grass with feathery panicles,
+  timothy and wild awned seed-head grass, green and dry bunch-grass tussocks, moss cushions, sedge, dandelions with
+  seed clocks, clover (with and without flowers) and dandelion / plantain rosettes, plus DINKIssTyle's 3D flower
+  plants. They grow in drifts, and every clump variant leans to one lawn colour, so fields look patchy, not tiled.
+- **Biomes from the GPS position**: a Koppen-Geiger climate map (Beck et al. 2018, `licenses/Beck-KG-NOTICE.txt`)
+  gives the climate at the aircraft; it picks the plant mix and how the seasons look (table below).
 - **Placement**: ported from XPGrass 1.0.4 (Tor Jakobsen, MIT, `licenses/XPGrass-LICENSE.txt`): apt.dat
   runways/pavements/boundaries plus the airport pack's draped `.pol` polygons and `.lin` roads/paths are rasterised
   into a pavement mask; clumps are placed on a grid around the aircraft, probed onto the terrain and created as
@@ -31,6 +39,26 @@ Plugins > zoal-grass > Season / style (or `style =` in `zoal-grass.ini`):
 
 `flowers =` (or the Flowers menu) scales the flower density.
 
+## Plants / biome
+
+Plugins > zoal-grass > Plants / biome (or `biome =` in `zoal-grass.ini`). `auto` (default) looks up the Koppen
+climate at the aircraft position (a 0.25° grid; airports in a coastal water cell take the nearest land). A new climate
+is taken up while no airport has grass (in flight), so an airport on a climate border keeps one look:
+
+| biome | Koppen | plants | seasons (`style = auto`) |
+|---|---|---|---|
+| `temperate` | Cf, Cw | lawn, meadow panicles, clover, dandelions, rosettes | by date and latitude, as above |
+| `continental` | D | as temperate, more moss and sedge | by date and latitude |
+| `mediterranean` | Cs | golden seed grass, tussocks, some clover | green Dec-Apr, golden Jun-Oct |
+| `steppe` | BS | bunch-grass tussocks, dry seed grass, sparse lawn | short green spring, then dry |
+| `desert` | BW | sparse dry tussocks on bare ground | always dry (cold deserts: winter) |
+| `tropical` | Af, Am | tall lush lawn, sedge | always summer |
+| `savanna` | Aw | tall seed grass, tussocks | green wet season, straw dry season |
+| `tundra` | ET, EF | moss cushions, sedge, short grass | short summer, long winter |
+
+Choosing a biome by hand keeps its plants anywhere; with `style = auto` its seasons then follow a typical climate of
+that biome.
+
 ## Install
 
 Unzip a release and drop the `zoal-grass` folder into `<X-Plane 12>/Resources/plugins/`:
@@ -38,7 +66,7 @@ Unzip a release and drop the `zoal-grass` folder into `<X-Plane 12>/Resources/pl
 ```
 zoal-grass/
   mac_x64/zoal-grass.xpl   win_x64/zoal-grass.xpl   lin_x64/zoal-grass.xpl
-  resources/               grass_art.txt, textures/zg_atlas_<style>.png
+  resources/               grass_art.txt, climate_kg.bin, textures/zg_atlas_<style>.png
   licenses/
 ```
 
@@ -61,13 +89,23 @@ Pushing a `v*` tag runs `release.yml`, which packages all three into `zoal-grass
 
 ## Art
 
-`resources/` holds the baked art only: one atlas per season and `grass_art.txt` (sprite/strip rectangles, blade
-colour strip, flower plants), derived from DINKIssTyle 3D Grass (`licenses/DINKIssTyle-NOTICE.txt`). To re-bake from
-the original download:
+`resources/` holds the baked art only: one 2048 x 1024 atlas per season, `grass_art.txt` (blade colour strip, flower
+plants, plant cards) and `climate_kg.bin`. The blade colour strip and the flower plants are derived from DINKIssTyle
+3D Grass (`licenses/DINKIssTyle-NOTICE.txt`); the plant cards are modelled in Blender by `tools/blender_species.py`
+(every plant is real geometry: tapered curved blades, spikelet seed heads, panicles, clover leaflets, toothed rosette
+leaves, moss domes, lit by a soft sky and a high sun so clumps get dark interiors and bright tips) and rendered into
+alpha sprites. To rebuild everything:
 
 ```sh
-python3 tools/bake_art.py <path>/DINKIssTyle_LIB_Grass resources
+python3 tools/bake_art.py <path>/DINKIssTyle_LIB_Grass resources          # original art: 1024 x 512 atlases
+blender -b --factory-startup -P tools/blender_species.py -- /tmp/zg_species   # Blender 4.2+ / 5: plant sprites
+python3 tools/compose_atlas.py /tmp/zg_species resources                  # pack, grade per season (Pillow, numpy)
+python3 tools/bake_climate.py <path>/Beck_KG_V1_present_0p083.tif resources   # climate grid (Pillow)
 ```
+
+To add a plant: write a builder in `blender_species.py`, add it to `SPECIES` (name, side/top, metres, pixels), re-run
+the last three steps and give it a kind in `GrassAssets::load` and a density in `species_mix` (`src/biome.cpp`).
+`compose_atlas.py` can be re-run on its own output.
 
 To look at the generated clumps without X-Plane (Blender 4.3+ / 5):
 

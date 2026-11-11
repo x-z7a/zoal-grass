@@ -2,9 +2,9 @@
 
 blender -b --factory-startup -P tools/preview_blender.py -- <dir with zg_*.obj> <out prefix> [spacing_m] [grid]
 
-Reads the X-Plane OBJ8 files the plugin writes (VT / IDX / TRIS of the nearest LOD, TEXTURE), lays clumps out on the
-same grid the plugin uses (quarter-turn rotations, small jitter), and renders an eye-level and a low aerial view with
-Cycles. Writes <out prefix>_eye.png and <out prefix>_air.png.
+Reads the X-Plane OBJ8 files the plugin writes (VT / IDX / TRIS per ATTR_LOD, TEXTURE), lays clumps out on the same grid
+the plugin uses (quarter-turn rotations), gives every clump the level of detail X-Plane would pick for the camera, and
+renders eye-level, close and low aerial views with Cycles: <out prefix>_eye.png, _close.png, _air.png.
 """
 import glob
 import math
@@ -22,7 +22,7 @@ GRID = int(argv[3]) if len(argv) > 3 else 9
 
 
 def read_obj8(path):
-    verts, idx, lods, tex = [], [], [], None
+    verts, idx, lods, tex = [], [], [], None      # lods: [lo, hi, first, count]
     for line in open(path):
         t = line.split()
         if not t:
@@ -33,8 +33,10 @@ def read_obj8(path):
             verts.append([float(v) for v in t[1:9]])
         elif t[0] in ("IDX", "IDX10"):
             idx += [int(v) for v in t[1:]]
+        elif t[0] == "ATTR_LOD":
+            lods.append([float(t[1]), float(t[2]), 0, 0])
         elif t[0] == "TRIS":
-            lods.append((int(t[1]), int(t[2])))
+            lods[-1][2:] = [int(t[1]), int(t[2])]
     return verts, idx, lods, tex
 
 
@@ -73,6 +75,19 @@ def material(tex_path):
     nt.links.new(img.outputs["Color"], bsdf.inputs["Base Color"])
     nt.links.new(img.outputs["Alpha"], gt.inputs[0])
     nt.links.new(gt.outputs[0], bsdf.inputs["Alpha"])
+    # X-Plane draws only the copy of a two-sided face that faces the camera, with its own (up-leaning) normal; Cycles
+    # hits both copies and flips the normal of the one seen from behind, which would light it from below. Undo that.
+    geo = nt.nodes.new("ShaderNodeNewGeometry")
+    sign = nt.nodes.new("ShaderNodeMath")
+    sign.operation = "MULTIPLY_ADD"
+    sign.inputs[1].default_value = -2.0
+    sign.inputs[2].default_value = 1.0
+    nt.links.new(geo.outputs["Backfacing"], sign.inputs[0])
+    flip = nt.nodes.new("ShaderNodeVectorMath")
+    flip.operation = "SCALE"
+    nt.links.new(geo.outputs["Normal"], flip.inputs[0])
+    nt.links.new(sign.outputs[0], flip.inputs["Scale"])
+    nt.links.new(flip.outputs[0], bsdf.inputs["Normal"])
     bsdf.inputs["Roughness"].default_value = 0.9
     try:
         bsdf.inputs["Subsurface Weight"].default_value = 0.0
@@ -120,8 +135,6 @@ gme.materials.append(gm)
 paths = sorted(p for p in glob.glob(os.path.join(SRC, "zg_*_n_*.obj")))
 if not paths:
     sys.exit("no zg_*_n_*.obj in " + SRC)
-LOD_NEAR = float(argv[4]) if len(argv) > 4 else 40.0
-LOD_MID = float(argv[5]) if len(argv) > 5 else 140.0
 meshes = []          # [variant][lod]
 mat = None
 for path in paths:
@@ -129,12 +142,12 @@ for path in paths:
     if mat is None:
         mat = material(os.path.join(SRC, tex))
     per = []
-    for n, (first, count) in enumerate(lods):
+    for n, (lo, hi, first, count) in enumerate(lods):
         me = make_mesh("%s_%d" % (os.path.basename(path), n), verts, idx, first, count)
         me.materials.append(mat)
-        per.append(me)
+        per.append((lo, hi, me))
     meshes.append(per)
-print("clump meshes:", len(meshes), "triangles per level:", [len(m.polygons) for m in meshes[0]])
+print("clump meshes:", len(meshes), "triangles per level:", [len(m.polygons) for _, _, m in meshes[0]])
 
 half = GRID // 2
 clumps = []
@@ -152,8 +165,10 @@ def place(eye):
             rot = rng.randrange(4)
             loc = Vector((i * SPACING, j * SPACING, -0.03))
             d = (loc - Vector(eye)).length
-            lod = 0 if d < LOD_NEAR else 1 if d < LOD_MID else 2
-            ob = bpy.data.objects.new("c%d_%d" % (i, j), var[min(lod, len(var) - 1)])
+            me = next((m for lo, hi, m in var if lo <= d < hi), None)
+            if me is None:
+                continue
+            ob = bpy.data.objects.new("c%d_%d" % (i, j), me)
             ob.location = loc
             ob.rotation_euler = (0, 0, math.radians(90 * rot))
             scene.collection.objects.link(ob)

@@ -36,6 +36,7 @@ public:
     void refresh_terrain();                  // scenery tiles (re)loaded: keep the grass, re-try the empty cells
     std::string status() const;
     const std::string& active_style() const { return active_style_; }
+    const std::string& active_biome() const { return active_biome_; }
     void log(const std::string& msg) const;
 
 private:
@@ -85,7 +86,9 @@ private:
     Made create(AirportState& st, int i, int j, double px, double py, double ref_y, double min_ny, Cell& out);
     bool ground_altitude(AirportState& st, double lat, double lon, double ref_y);
     void follow_origin();
-    std::string resolve_style(double lat) const;   // "auto" -> season from date and latitude
+    // season style and biome for a position: "auto" -> Koppen climate there, the sim date and snow cover;
+    // keep_climate: the climate of the current look instead of the one at (lat, lon)
+    std::string resolve_look(double lat, double lon, int& biome, int& koppen, bool keep_climate = false) const;
     void flush_logs();
     double now() const;
 
@@ -100,8 +103,10 @@ private:
     XPLMDataRef lat_ref_ = nullptr, lon_ref_ = nullptr, y_ref_ = nullptr, latr_ref_ = nullptr, lonr_ref_ = nullptr;
     XPLMDataRef fps_ref_ = nullptr, day_ref_ = nullptr, snow_ref_ = nullptr;
     bool snow_hidden_ = false;
-    std::string active_style_;
-    double next_style_check_ = 0, last_lat_ = 0;
+    std::string active_style_, active_biome_;
+    int active_koppen_ = 0;
+    ClimateMap climate_;
+    double next_style_check_ = 0, last_lat_ = 0, last_lon_ = 0;
     void (*autoshift_)(XPLMInstanceRef) = nullptr;
     bool origin_known_ = false;
     float origin_lat_ = 0, origin_lon_ = 0;

@@ -26,13 +26,15 @@ struct Settings {
     std::string dsf_allow_words;
     // look (changing any of these rebuilds the clump objects)
     std::string style = "auto";        // auto | spring | summer | late_summer | autumn | winter | custom
+    std::string biome = "auto";        // auto (Koppen climate at the aircraft position) | temperate | ... (biome.h)
     double flowers = 1.0;              // factor on the style's flower density (0 = no flowers)
     double grass_height_cm = 25.0;     // average tuft height on normal ground
     double density = 1.0;              // tuft density factor (1 = as dense as the DINKIssTyle lawn at that height)
     double dry_mix = 0.15;             // custom style only: fraction of tufts that use the dry (yellow) texture
     double width_scale = 1.0;          // extra horizontal tuft scale
-    double lod_near_m = 40.0;          // real 3D blades closer than this (camera distance)
-    double lod_mid_m = 140.0;          // DINKIssTyle tuft cards closer than this; sparse fringe strips beyond
+    double lod_near_m = 40.0;          // all flowers (and real_blades) closer than this
+    double lod_mid_m = 140.0;          // real_blades only: full plant cards closer than this, fewer beyond
+    bool real_blades = false;          // 3D blades close up (more triangles; the grass changes look near the camera)
     bool optimize_for_gpu = false;     // single-sided ATTR_no_cull meshes instead of two-sided instanced ones
     bool cast_shadows = false;
     bool normal_map = true;

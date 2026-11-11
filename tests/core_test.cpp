@@ -1,8 +1,9 @@
 // X-Plane-free checks of the plugin core, run by CI on every platform:
 //  - an apt.dat record parses, and its pavement mask keeps grass off the runway but not off the grass beside it
 //  - the airport index finds the airport from a tiny scenery layout
-//  - the grass objects build for every style and are well-formed OBJ8 files
-//  - the season mapping follows the hemisphere
+//  - the grass objects build for every style and biome, are well-formed OBJ8 files and stay in the triangle budget
+//  - the season mapping follows the hemisphere and the climate
+//  - the Koppen climate grid gives the right climate for known airports (and for coastal ones in a water cell)
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -12,6 +13,7 @@
 
 #include "apt.h"
 #include "assets.h"
+#include "biome.h"
 #include "mask.h"
 #include "platform.h"
 #include "style.h"
@@ -99,8 +101,11 @@ int main(int argc, char** argv) {
     // ---- grass objects for every style
     GrassAssets assets;
     CHECK(assets.load(resources, [](const std::string& m) { std::printf("  %s\n", m.c_str()); }));
-    for (const Style& st : kStyles) {
+    for (int run = 0; run < kStyleCount + kBiomeCount; ++run) {
+        const Style& st = kStyles[run < kStyleCount ? run : 1];               // the biomes in summer
+        int biome = run < kStyleCount ? kTemperate : run - kStyleCount;
         LookParams p;
+        p.mix = species_mix(biome, st.name);
         p.footprint_m = 4.5;
         p.height_m = 0.25 * st.height_factor;
         p.dry_mix = st.dry_mix >= 0 ? st.dry_mix : 0.15;
@@ -111,20 +116,42 @@ int main(int argc, char** argv) {
         p.lod_mid = 140;
         p.lod_far = 390;
         BuiltObjects out;
-        std::string dir = scratch + "/objs_" + st.name;
+        std::string dir = scratch + "/objs_" + st.name + "_" + kBiomes[biome].name;
         CHECK(assets.build(resources, dir, p, out, [](const std::string& m) { std::printf("  %s\n", m.c_str()); }));
         CHECK(out.normal.size() == 4 && out.mowed.size() == 4);
-        CHECK(out.tris_near > out.tris_mid && out.tris_mid > out.tris_far && out.tris_far > 0);
-        CHECK(out.tris_near < 40000);
-        std::printf("%-12s near/mid/far triangles %d/%d/%d\n", st.name, out.tris_near, out.tris_mid, out.tris_far);
+        CHECK(out.tris[0] >= out.tris[2] && out.tris[2] > 0 && out.tris[1] == 0 && out.tris[3] == 0);
+        CHECK(out.tris[0] < 3000);
+        CHECK(out.tris[2] < 2500);                    // beyond 40 m: nearly every clump, keep it cheap
+        std::printf("%-12s %-13s triangles per level %d/%d/%d/%d, %d plant cards\n", st.name, kBiomes[biome].name,
+                    out.tris[0], out.tris[1], out.tris[2], out.tris[3], out.cards);
         if (!out.normal.empty()) {
             std::string obj = read_text(out.normal[0]);
             CHECK(obj.rfind("A\n800\nOBJ\n", 0) == 0);
             CHECK(obj.find("TEXTURE " + std::string(st.texture)) != std::string::npos);
             CHECK(obj.find("ATTR_LOD 0 40") != std::string::npos);
+            CHECK(obj.find("ATTR_LOD 40 390") != std::string::npos);   // one density out to the grass edge
+            CHECK(obj.find("ATTR_LOD 140") == std::string::npos);
+            CHECK(obj.find("ATTR_LOD 0 16") == std::string::npos);
             CHECK(obj.find('\r') == std::string::npos);
             CHECK(is_file(dir + "/" + st.texture));
         }
+    }
+
+    {   // real 3D blades close up: four levels
+        LookParams p;
+        p.footprint_m = 4.5;
+        p.lod_near = 40;
+        p.lod_mid = 140;
+        p.lod_far = 390;
+        p.real_blades = true;
+        p.mix = species_mix(kTemperate, "summer");
+        BuiltObjects out;
+        CHECK(assets.build(resources, scratch + "/objs_blades", p, out, [](const std::string&) {}));
+        CHECK(out.tris[0] > out.tris[1] && out.tris[1] > out.tris[2] && out.tris[0] < 40000);
+        std::string obj = read_text(out.normal[0]);
+        CHECK(obj.find("ATTR_LOD 0 16") != std::string::npos && obj.find("ATTR_LOD 16 40") != std::string::npos);
+        std::printf("real blades  temperate     triangles per level %d/%d/%d/%d\n", out.tris[0], out.tris[1], out.tris[2],
+                    out.tris[3]);
     }
 
     // ---- seasons
@@ -132,6 +159,32 @@ int main(int argc, char** argv) {
     CHECK(std::string(season_for(181, -45.0)) == "winter");
     CHECK(std::string(season_for(14, 10.0)) == "summer");
     CHECK(std::string(season_for(14, 37.0)) == "autumn");
+    CHECK(std::string(season_for_climate(8, 181, 41.8)) == "late_summer");   // Rome in July: golden
+    CHECK(std::string(season_for_climate(8, 14, 41.8)) == "spring");         // ... and green in January
+    CHECK(std::string(season_for_climate(3, 181, -12.4)) == "late_summer");  // Darwin: July is the dry season
+    CHECK(std::string(season_for_climate(3, 14, -12.4)) == "summer");
+    CHECK(std::string(season_for_climate(1, 14, 1.4)) == "summer");          // Singapore
+    CHECK(std::string(season_for_climate(26, 181, 44.5)) == "summer");       // Burlington
+    CHECK(std::string(season_for_climate(29, 100, 71.3)) == "winter");       // Utqiagvik in April
+
+    // ---- climate grid
+    ClimateMap climate;
+    CHECK(climate.load(resources + "/climate_kg.bin"));
+    struct Place { const char* name; double lat, lon; int biome; };
+    const Place places[] = {
+        {"London", 51.47, -0.45, kTemperate},     {"Burlington", 44.47, -73.15, kContinental},
+        {"Rome", 41.80, 12.25, kMediterranean},   {"Denver", 39.86, -104.67, kSteppe},
+        {"Phoenix", 33.43, -112.01, kDesert},     {"Singapore", 1.36, 103.99, kTropical},
+        {"Darwin", -12.41, 130.88, kSavanna},     {"Utqiagvik", 71.29, -156.77, kTundra},
+        {"Dover strait", 51.0, 1.5, kTemperate},  // a water cell: the nearest land
+    };
+    for (const Place& pl : places) {
+        int k = climate.koppen(pl.lat, pl.lon);
+        std::printf("%-13s Koppen %-3s -> %s\n", pl.name, koppen_symbol(k), kBiomes[biome_for_koppen(k, pl.lat)].name);
+        CHECK(biome_for_koppen(k, pl.lat) == pl.biome);
+    }
+    CHECK(climate.koppen(-40.0, -100.0) == 0);              // South Pacific: no land near
+    CHECK(biome_for_koppen(0, 10.0) == kTropical && biome_for_koppen(0, 45.0) == kTemperate);
 
     if (failures) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);
