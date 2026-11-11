@@ -112,8 +112,8 @@ jobs:
           path: dist/zoal-grass-${{ steps.version.outputs.version }}.zip
           if-no-files-found: error
 
-      # Only a tag publishes; workflow_dispatch rehearses the same archive as an artifact. A release that already
-      # exists for the tag gets the zip uploaded (replacing an old one) instead of failing.
+      # Only a tag publishes (an upsert: create, or update an existing release); workflow_dispatch rehearses the
+      # same archive as an artifact.
       - name: Publish release
         if: github.event_name == 'push'
         env:
@@ -131,12 +131,16 @@ jobs:
             fi
           } > release-notes.md
           zip="dist/zoal-grass-${version}.zip"
+          # pre-release for versions with a suffix, such as v1.2.3-alpha.1
+          prerelease=false
+          case "${version}" in *-*) prerelease=true ;; esac
+          # Upsert: create the release when there is none; otherwise (made in the GitHub UI, which also pushes
+          # the tag, or a re-run) bring its title, notes and pre-release flag up to date and replace the zip.
           if gh release view "${version}" >/dev/null 2>&1; then
-            # The release already exists (made in the GitHub UI, which also pushes the tag, or a re-run):
-            # attach the zip, replacing an older one, and leave the existing notes alone.
+            gh release edit "${version}" --title "${version}" --notes-file release-notes.md \
+              --prerelease="${prerelease}"
             gh release upload "${version}" "${zip}" --clobber
           else
-            prerelease=()
-            case "${version}" in *-*) prerelease=(--prerelease) ;; esac   # v1.2.3-alpha.1 and the like
-            gh release create "${version}" "${zip}" --title "${version}" --notes-file release-notes.md "${prerelease[@]}"
+            gh release create "${version}" "${zip}" --title "${version}" --notes-file release-notes.md \
+              --prerelease="${prerelease}"
           fi
