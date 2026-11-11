@@ -1,5 +1,6 @@
 // X-Plane-free checks of the plugin core, run by CI on every platform:
 //  - an apt.dat record parses, and its pavement mask keeps grass off the runway but not off the grass beside it
+//  - OpenStreetMap roads and car parks keep grass off; grass tracks and tunnels do not
 //  - the airport index finds the airport from a tiny scenery layout
 //  - the grass objects build for every style and biome, are well-formed OBJ8 files and stay in the triangle budget
 //  - the season mapping follows the hemisphere and the climate
@@ -15,7 +16,9 @@
 #include "geo.h"
 #include "assets.h"
 #include "biome.h"
+#include "http.h"
 #include "mask.h"
+#include "osm.h"
 #include "platform.h"
 #include "style.h"
 
@@ -48,6 +51,25 @@ static std::string read_text(const std::string& path) {
     return ss.str();
 }
 
+// The clearance must enclose the actual emitted geometry, including top cards, leaning blades and far LODs.
+static void check_footprint(const BuiltObjects& built) {
+    CHECK(built.clearance_m > 0);
+    for (const auto* paths : {&built.normal, &built.mowed}) {
+        for (const auto& path : *paths) {
+            std::istringstream in(read_text(path));
+            std::string line;
+            double farthest = 0;
+            while (std::getline(in, line)) {
+                if (line.rfind("VT ", 0) != 0) continue;
+                std::istringstream row(line.substr(3));
+                double x, y, z;
+                if (row >> x >> y >> z) farthest = std::max(farthest, std::hypot(x, z));
+            }
+            CHECK(farthest > 0 && farthest < built.clearance_m);
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 3) {
         std::fprintf(stderr, "usage: core_test <resources dir> <scratch dir>\n");
@@ -78,6 +100,40 @@ int main(int argc, char** argv) {
             CHECK(!mask->grass_ok(apron.x, apron.y));
             CHECK(!mask->grass_ok(edge.x, edge.y));
         }
+
+        // OpenStreetMap: a road, a car park, a grass track and a road in a tunnel west of the runway
+        auto lon_at = [](double metres_west) { return 8.0 - metres_west / 75800.0; };
+        auto way = [&](const char* tags, std::vector<std::pair<double, double>> pts) {
+            std::string w = "<way id=\"1\">";
+            for (auto& q : pts) w += "<nd ref=\"1\" lat=\"" + std::to_string(q.first) + "\" lon=\"" + std::to_string(q.second) + "\"/>";
+            return w + tags + "</way>\n";
+        };
+        std::string xml = "<?xml version=\"1.0\"?><osm version=\"0.6\">\n" +
+            way("<tag k=\"highway\" v=\"residential\"/>", {{47.001, lon_at(120)}, {47.008, lon_at(120)}}) +
+            way("<tag k=\"highway\" v=\"track\"/><tag k=\"surface\" v=\"grass\"/>", {{47.001, lon_at(60)}, {47.008, lon_at(60)}}) +
+            way("<tag k=\"highway\" v=\"primary\"/><tag k=\"tunnel\" v=\"yes\"/>", {{47.001, lon_at(90)}, {47.008, lon_at(90)}}) +
+            way("<tag k=\"amenity\" v=\"parking\"/>", {{47.004, lon_at(165)}, {47.004, lon_at(185)}, {47.005, lon_at(185)},
+                                                            {47.005, lon_at(165)}, {47.004, lon_at(165)}}) +
+            "</osm>\n";
+        OsmStats os;
+        Airport with_osm = *ap;
+        with_osm.draped = osm_hard_ground(xml, &os);
+        CHECK(os.ways == 4 && os.bands == 1 && os.areas == 1 && os.skipped == 2);
+        auto m2 = build_mask(with_osm, ms);
+        CHECK(m2 != nullptr);
+        if (m2) {
+            auto ok = [&](double lat, double west) {
+                XY q = m2->proj.to_xy(lat, lon_at(west));
+                return m2->grass_ok(q.x, q.y);
+            };
+            CHECK(!ok(47.0045, 120));      // on the road
+            CHECK(!ok(47.0045, 175));      // in the car park
+            CHECK(ok(47.0045, 60));        // the grass track keeps its grass
+            CHECK(ok(47.0045, 90));        // the tunnel is underground
+            CHECK(ok(47.0045, 145));       // between road and car park
+        }
+        CHECK(overpass_query(47, 8, 47.01, 8.01).find("(47.000,8.000,47.010,8.010)") != std::string::npos);
+        CHECK(url_encode("a b&c=d") == "a+b%26c%3Dd");
     }
 
     // ---- the airport index over a tiny X-Plane folder
@@ -118,6 +174,7 @@ int main(int argc, char** argv) {
         std::string dir = scratch + "/objs_" + st.name + "_" + kBiomes[biome].name;
         CHECK(assets.build(resources, dir, p, out, [](const std::string& m) { std::printf("  %s\n", m.c_str()); }));
         CHECK(out.normal.size() == 4 && out.mowed.size() == 4);
+        check_footprint(out);
         CHECK(out.tris[0] > 0 && out.tris[1] == 0 && out.tris[2] == 0 && out.tris[3] == 0);
         CHECK(out.tris[0] < 1800);                    // one level for every clump: keep it cheap
         std::printf("%-12s %-13s triangles per level %d/%d/%d/%d, %d plant cards\n", st.name, kBiomes[biome].name,
@@ -144,10 +201,23 @@ int main(int argc, char** argv) {
         BuiltObjects out;
         CHECK(assets.build(resources, scratch + "/objs_blades", p, out, [](const std::string&) {}));
         CHECK(out.tris[0] > out.tris[1] && out.tris[1] > out.tris[2] && out.tris[2] > out.tris[3] && out.tris[0] < 40000);
+        check_footprint(out);
         std::string obj = read_text(out.normal[0]);
         CHECK(obj.find("ATTR_LOD 0 16") != std::string::npos && obj.find("ATTR_LOD 16 40") != std::string::npos);
         std::printf("real blades  temperate     triangles per level %d/%d/%d/%d\n", out.tris[0], out.tris[1], out.tris[2],
                     out.tris[3]);
+    }
+
+    {   // width/height and distant LODs can exceed the nominal grid footprint significantly
+        LookParams p;
+        p.real_blades = true;
+        p.width_scale = 3;
+        p.height_m = 1;
+        p.footprint_m = 2;
+        BuiltObjects wide;
+        CHECK(assets.build(resources, scratch + "/objs_wide", p, wide, [](const std::string&) {}));
+        check_footprint(wide);
+        CHECK(wide.clearance_m > p.footprint_m);
     }
 
     // ---- standing a clump on the terrain slope: the angles rebuild the terrain normal for every heading

@@ -48,7 +48,7 @@ const Field kFields[] = {
     F_NUM(hysteresis_m, "grass is removed only once it is this much further away (stops flicker at the edge)"),
     F_NUM(spacing_m, "distance between clumps on the placement grid, metres (each clump covers slightly more)"),
     F_NUM(max_slope_deg, "no grass on ground steeper than this"),
-    F_NUM(pavement_margin_m, "keep-out distance from pavement to the middle of a clump, metres"),
+    F_NUM(pavement_margin_m, "extra keep-out distance beyond the full grass footprint, metres"),
     F_NUM(boundary_margin_m, "how far outside the airport boundary grass may extend (when grass_outside_airport = false)"),
     F_NUM(fallback_margin_m, "grass area around the pavement for airports without a boundary"),
     F_NUM(mask_cell_m, "resolution of the pavement mask, metres"),
@@ -56,9 +56,12 @@ const Field kFields[] = {
     F_BOOL(grass_on_turf_runways, "grow (half-height) grass on turf runways and helipads"),
     F_BOOL(grass_on_dirt, "grow grass on dirt surfaces"),
     F_BOOL(grass_on_gravel, "grow grass on gravel surfaces"),
-    F_BOOL(use_dsf_polygons, "keep grass off draped pavement polygons and road/path lines of the airport's scenery pack"),
+    F_BOOL(use_dsf_polygons, "keep grass off pavement, roads, autogen and object footprints in the active scenery stack"),
     F_STR(dsf_block_words, "comma separated words: a .pol/.lin library path containing one is always pavement"),
     F_STR(dsf_allow_words, "comma separated words: a .pol/.lin library path containing one is never pavement"),
+    F_BOOL(use_osm_roads, "keep grass off OpenStreetMap roads, car parks and rail lines (downloaded once per airport from the Overpass server below, then cached; only the airport's bounding box is sent)"),
+    F_STR(osm_overpass_url, "Overpass API server for the OpenStreetMap roads"),
+    F_NUM(osm_cache_days, "re-download an airport's OpenStreetMap roads after this many days (1 .. 3650)"),
     F_STR(style, "season / style: auto (from date, position and climate), spring, summer, late_summer, autumn, winter, custom"),
     F_STR(biome, "plants: auto (from the Koppen climate at the aircraft position), temperate, continental, mediterranean, steppe, desert, tropical, savanna, tundra"),
     F_NUM(grass_height_cm, "average grass height, centimetres (5 .. 80)"),
@@ -94,6 +97,9 @@ void Settings::clamp() {
     lod_mid_m = clampv(lod_mid_m, lod_near_m + 10.0, 3000.0);
     style = lower(trim(style));
     if (style != "auto" && !find_style(style)) style = "auto";
+    osm_cache_days = clampv(osm_cache_days, 1.0, 3650.0);
+    osm_overpass_url = trim(osm_overpass_url);
+    if (osm_overpass_url.rfind("http", 0) != 0) osm_overpass_url = "https://overpass-api.de/api/interpreter";
     biome = lower(trim(biome));
     if (biome != "auto" && find_biome(biome) < 0) biome = "auto";
 }
@@ -168,7 +174,8 @@ bool mask_changed(const Settings& a, const Settings& b) {
            a.grass_outside_airport != b.grass_outside_airport || a.grass_on_turf_runways != b.grass_on_turf_runways ||
            a.grass_on_dirt != b.grass_on_dirt || a.grass_on_gravel != b.grass_on_gravel ||
            a.use_dsf_polygons != b.use_dsf_polygons || a.dsf_block_words != b.dsf_block_words ||
-           a.dsf_allow_words != b.dsf_allow_words ||
+           a.dsf_allow_words != b.dsf_allow_words || a.use_osm_roads != b.use_osm_roads ||
+           a.osm_overpass_url != b.osm_overpass_url ||
            (b.grass_outside_airport && b.radius_m > a.radius_m);
 }
 

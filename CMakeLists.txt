@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(zoal_grass VERSION 0.1.0 LANGUAGES CXX)
+project(zoal_grass VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,6 +32,30 @@ else()
     message(FATAL_ERROR "Unsupported platform.")
 endif()
 
+# Public-domain 7-Zip decoder: compressed global scenery, no external executable needed.
+add_library(zg_7zip STATIC
+    third_party/7zip/7zAlloc.c
+    third_party/7zip/7zArcIn.c
+    third_party/7zip/7zBuf.c
+    third_party/7zip/7zBuf2.c
+    third_party/7zip/7zCrc.c
+    third_party/7zip/7zCrcOpt.c
+    third_party/7zip/7zDec.c
+    third_party/7zip/7zStream.c
+    third_party/7zip/Bcj2.c
+    third_party/7zip/Bra.c
+    third_party/7zip/Bra86.c
+    third_party/7zip/BraIA64.c
+    third_party/7zip/CpuArch.c
+    third_party/7zip/Delta.c
+    third_party/7zip/Lzma2Dec.c
+    third_party/7zip/LzmaDec.c
+    third_party/7zip/Ppmd7.c
+    third_party/7zip/Ppmd7Dec.c
+)
+target_include_directories(zg_7zip PUBLIC third_party/7zip)
+target_compile_definitions(zg_7zip PRIVATE Z7_PPMD_SUPPORT Z7_EXTRACT_ONLY)
+
 # ---------------------------------------------------------------- core (no X-Plane)
 add_library(zoal_grass_core STATIC
     src/apt.cpp
@@ -39,13 +63,20 @@ add_library(zoal_grass_core STATIC
     src/biome.cpp
     src/config.cpp
     src/dsf.cpp
+    src/dsf_archive.cpp
+    src/http.cpp
     src/mask.cpp
+    src/osm.cpp
     src/platform.cpp
 )
 target_include_directories(zoal_grass_core PUBLIC src)
+target_link_libraries(zoal_grass_core PRIVATE zg_7zip)
 if(WIN32)
     # windows.h (pulled in by the XPLM headers on Windows) must not define min/max macros over std::min/std::max
     target_compile_definitions(zoal_grass_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(zoal_grass_core PUBLIC winhttp)   # OSM downloads (src/http.cpp)
+else()
+    target_link_libraries(zoal_grass_core PUBLIC ${CMAKE_DL_LIBS})   # dlopen of the system libcurl
 endif()
 if(MSVC)
     target_compile_options(zoal_grass_core PUBLIC /W3 /utf-8 /permissive- /D_CRT_SECURE_NO_WARNINGS)
@@ -102,6 +133,9 @@ endif()
 # ---------------------------------------------------------------- tests
 if(ZOAL_GRASS_BUILD_TESTS)
     enable_testing()
+    add_executable(dsf_test tests/dsf_test.cpp)
+    target_link_libraries(dsf_test PRIVATE zoal_grass_core)
+    add_test(NAME dsf_test COMMAND dsf_test "${CMAKE_BINARY_DIR}/dsf-test-scratch" "${CMAKE_SOURCE_DIR}/tests/fixtures")
     add_executable(core_test tests/core_test.cpp)
     target_link_libraries(core_test PRIVATE zoal_grass_core)
     add_test(NAME core_test

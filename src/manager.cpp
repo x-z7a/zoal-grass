@@ -1,4 +1,7 @@
 #include "manager.h"
+
+#include "http.h"
+#include "osm.h"
 #include "style.h"
 
 #include <XPLMGraphics.h>
@@ -52,16 +55,16 @@ void row_span(double cx, double cy, int j, double s, double radius, int& first, 
     last = int(std::floor((cx + half) / s - 0.5));
 }
 
-bool snap(const PavementMask& mask, double px, double py, double spacing, double& ox, double& oy) {
+bool snap(const PavementMask& mask, double px, double py, double spacing, double clearance, double& ox, double& oy) {
     for (double ring : kSnapRings) {
         double reach = ring * spacing;
         for (int k = 0; k < 8; ++k) {
             double dx = std::cos(k * kPi / 4), dy = std::sin(k * kPi / 4);
-            if (mask.grass_ok(px + dx * reach, py + dy * reach)) {
+            if (mask.footprint_ok(px + dx * reach, py + dy * reach, clearance)) {
                 double lo = 0, hi = reach;
                 for (int n = 0; n < 4; ++n) {
                     double mid = (lo + hi) / 2;
-                    if (mask.grass_ok(px + dx * mid, py + dy * mid)) hi = mid;
+                    if (mask.footprint_ok(px + dx * mid, py + dy * mid, clearance)) hi = mid;
                     else lo = mid;
                 }
                 ox = px + dx * hi;
@@ -84,6 +87,7 @@ GrassManager::GrassManager(std::string plugin_dir, std::string xp_root, Settings
 }
 
 GrassManager::~GrassManager() {
+    http_cancel_all();   // an OSM download in flight must not hold up the shutdown (net_worker_ joins its thread)
     drop_all();
     unload_objects();
     if (probe_) XPLMDestroyProbe(probe_);
@@ -102,6 +106,7 @@ void GrassManager::log(const std::string& msg) const {
 
 void GrassManager::flush_logs() {
     for (auto& m : worker_.drain_logs()) log(m);
+    for (auto& m : net_worker_.drain_logs()) log(m);
 }
 
 void GrassManager::setup() {
@@ -341,6 +346,27 @@ float GrassManager::tick(float /*since_last*/) {
             if (!st.job->done.load()) { busy = true; continue; }
             st.mask = std::move(st.job->mask);
             if (!st.job->message.empty()) log(st.job->message);
+            if (st.job->osm_missing && !st.osm) {   // download the OSM roads off the mask worker
+                auto flag = std::make_shared<std::atomic<int>>(0);
+                st.osm = flag;
+                std::string url = settings_.osm_overpass_url, cache = plugin_dir_ + "/osm_cache", id = st.entry.ident;
+                double b[4] = {st.job->osm_box[0], st.job->osm_box[1], st.job->osm_box[2], st.job->osm_box[3]};
+                double days = settings_.osm_cache_days;
+                Worker* nw = &net_worker_;
+                log(id + ": downloading OpenStreetMap roads (" + url + "); grass is placed without them until then");
+                net_worker_.post([flag, url, cache, id, b, days, nw] {
+                    auto t0 = std::chrono::steady_clock::now();
+                    OsmFetch f = osm_fetch(url, cache, id, b[0], b[1], b[2], b[3], days, true);
+                    double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+                    char buf[160];
+                    std::snprintf(buf, sizeof buf, "%.0f s", secs);
+                    nw->log(id + (f.ok ? ": OpenStreetMap roads downloaded (" + std::string(buf) + ", " +
+                                             std::to_string(f.xml.size() / 1024) + " KB); rebuilding its grass"
+                                       : ": OpenStreetMap roads not available (" + f.error + ", " + buf +
+                                             "); grass stays without them until the next visit"));
+                    flag->store(f.ok ? 1 : -1);
+                });
+            }
             st.job.reset();
             if (!st.mask) failed_.insert(st.entry.ident);
             busy = true;
@@ -360,6 +386,15 @@ float GrassManager::tick(float /*since_last*/) {
 }
 
 void GrassManager::discover(double lat, double lon) {
+    // OSM roads arrived for an airport whose grass was placed without them: drop it, it comes back from the cache
+    for (auto it = airports_.begin(); it != airports_.end();) {
+        if (it->second->osm && it->second->osm->load() == 1 && !it->second->job) {
+            destroy_cells(*it->second);
+            it = airports_.erase(it);
+        } else {
+            ++it;
+        }
+    }
     double reach = settings_.radius_m + kActivateMarginM;
     auto candidates = index_->nearby(lat, lon, reach);
     size_t n = 0;
@@ -392,7 +427,8 @@ void GrassManager::activate(const AirportEntry& e) {
     auto ground_key = ground_key_;
     Worker* w = &worker_;
     AirportEntry entry = e;
-    worker_.post([job, index, cfg, ground, ground_key, w, entry] {
+    std::string osm_cache = plugin_dir_ + "/osm_cache";
+    worker_.post([job, index, cfg, ground, ground_key, w, entry, osm_cache] {
         auto t0 = std::chrono::steady_clock::now();
         auto ap = index->load(entry);
         if (!ap) {
@@ -416,6 +452,41 @@ void GrassManager::activate(const AirportEntry& e) {
                 ap->draped = (*ground)->collect(*ap, entry, pad);
             } catch (const std::exception& ex) {
                 w->log(entry.ident + ": draped polygons skipped after an error: " + ex.what());
+            }
+        }
+        if (cfg.use_osm_roads) {
+            // OpenStreetMap roads, car parks and rail around the airport, as hard ground like the draped polygons
+            double pad = std::max({cfg.boundary_margin_m, cfg.fallback_margin_m, cfg.open_pad_m()}) + 30.0;
+            double s = 90, wl = 180, n = -90, el = -180;
+            ap->for_each_point([&](const LatLon& q) {
+                s = std::min(s, q.lat); n = std::max(n, q.lat);
+                wl = std::min(wl, q.lon); el = std::max(el, q.lon);
+            });
+            if (s <= n && wl <= el && el - wl < 1.0) {
+                LocalProjection pj((s + n) / 2, (wl + el) / 2);
+                double dlat = pad / pj.ky, dlon = pad / pj.kx;
+                auto t1 = std::chrono::steady_clock::now();
+                OsmFetch f = osm_fetch(cfg.osm_overpass_url, osm_cache, entry.ident, s - dlat, wl - dlon, n + dlat,
+                                       el + dlon, cfg.osm_cache_days, false);
+                double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
+                if (!f.ok) {   // not cached: grass now without them; the manager downloads them and rebuilds
+                    job->osm_missing = true;
+                    job->osm_box[0] = s - dlat;
+                    job->osm_box[1] = wl - dlon;
+                    job->osm_box[2] = n + dlat;
+                    job->osm_box[3] = el + dlon;
+                } else {
+                    OsmStats os;
+                    auto hard = osm_hard_ground(f.xml, &os);
+                    char ob[200];
+                    std::snprintf(ob, sizeof ob, "%s: OpenStreetMap %s (%.1f s): %d roads/paths/rail, %d car parks/areas kept "
+                                  "clear of grass, %d ways ignored",
+                                  entry.ident.c_str(), f.cached ? "from cache" : "downloaded", secs, os.bands, os.areas,
+                                  os.skipped);
+                    w->log(ob);
+                    ap->draped.insert(ap->draped.end(), std::make_move_iterator(hard.begin()),
+                                      std::make_move_iterator(hard.end()));
+                }
             }
         }
         MaskSettings ms;
@@ -518,8 +589,8 @@ void GrassManager::scan(AirportState& st, double ax, double ay) {
                 double x = cx + (hash01(i, j, 1) - 0.5) * kJitter * s;
                 double y = cy + (hash01(i, j, 2) - 0.5) * kJitter * s;
                 double ox, oy;
-                bool ok = mask.grass_ok(x, y);
-                if (!ok && snap(mask, x, y, s, ox, oy)) { x = ox; y = oy; ok = true; }
+                bool ok = mask.footprint_ok(x, y, built_.clearance_m);
+                if (!ok && snap(mask, x, y, s, built_.clearance_m, ox, oy)) { x = ox; y = oy; ok = true; }
                 if (ok) {
                     double rx = cx - ax, ry = cy - ay;
                     found.push_back({std::hypot(rx, ry) - bias * (rx * st.hx + ry * st.hy), i, j, x, y});
@@ -589,6 +660,7 @@ bool GrassManager::ground_altitude(AirportState& st, double lat, double lon, dou
 }
 
 GrassManager::Made GrassManager::create(AirportState& st, int i, int j, double px, double py, double ref_y, double min_ny, Cell& out) {
+    if (!st.mask->footprint_ok(px, py, built_.clearance_m)) return Made::Rejected;
     LatLon ll = st.mask->proj.to_latlon(px, py);
     if (!st.alt_ok) st.alt_known = ground_altitude(st, ll.lat, ll.lon, ref_y);
     double x, y, z;

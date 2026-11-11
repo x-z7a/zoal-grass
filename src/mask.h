@@ -42,6 +42,9 @@ public:
         if (i >= w || j >= h || blocked[size_t(j) * size_t(w) + size_t(i)]) return false;
         return area[size_t(j / f) * size_t(cw) + size_t(i / f)] == 1;
     }
+    // Conservative square around the mesh's bounding circle: checks every covered cell, not just corners.
+    // This remains safe for all instance headings and for obstructions inside the footprint.
+    bool footprint_ok(double x, double y, double radius) const;
     bool is_mowed(double x, double y) const {
         if (mowed.empty()) return false;
         double fx = (x - x0) * inv, fy = (y - y0) * inv;

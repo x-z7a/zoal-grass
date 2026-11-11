@@ -11,9 +11,9 @@ struct Settings {
     // placement
     double radius_m = 200.0;           // grass appears within this many metres of the aircraft
     double hysteresis_m = 40.0;        // removed only once this much further away
-    double spacing_m = 4.5;            // clump grid spacing; clumps are slightly larger so they join up
+    double spacing_m = 4.5;            // clump grid spacing; plant cards can extend beyond it
     double max_slope_deg = 12.0;
-    double pavement_margin_m = 3.5;    // keep-out from pavement, to the middle of a clump
+    double pavement_margin_m = 3.5;    // extra clearance beyond the full clump footprint
     double boundary_margin_m = 20.0;
     double fallback_margin_m = 120.0;
     double mask_cell_m = 1.0;
@@ -24,6 +24,9 @@ struct Settings {
     bool use_dsf_polygons = true;
     std::string dsf_block_words;
     std::string dsf_allow_words;
+    bool use_osm_roads = true;         // keep grass off OpenStreetMap roads, car parks and rail (downloads, cached)
+    std::string osm_overpass_url = "https://overpass-api.de/api/interpreter";
+    double osm_cache_days = 30.0;
     // look (changing any of these rebuilds the clump objects)
     std::string style = "auto";        // auto | spring | summer | late_summer | autumn | winter | custom
     std::string biome = "auto";        // auto (Koppen climate at the aircraft position) | temperate | ... (biome.h)
