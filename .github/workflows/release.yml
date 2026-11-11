@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. v0.1.0). No release is published."
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac_x64
+          - os: windows-latest
+            platform: win_x64
+          - os: ubuntu-latest
+            platform: lin_x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Provision the X-Plane SDK
+        shell: bash
+        run: scripts/ensure-deps.sh
+
+      - name: Build and test
+        shell: bash
+        run: |
+          cmake -S . -B build-plugin -DCMAKE_BUILD_TYPE=Release \
+            -DZOAL_GRASS_VERSION="${{ steps.version.outputs.version }}"
+          cmake --build build-plugin --config Release
+          ctest --test-dir build-plugin -C Release --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ matrix.platform }}
+          path: build-plugin/${{ matrix.platform }}/zoal-grass.xpl
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Package and publish
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: plugin-*
+          path: artifacts
+
+      - name: Lay out the built binaries
+        run: |
+          for platform in mac_x64 win_x64 lin_x64; do
+            mkdir -p "build-plugin/${platform}"
+            cp "artifacts/plugin-${platform}/zoal-grass.xpl" "build-plugin/${platform}/"
+          done
+
+      - name: Package
+        env:
+          ZOAL_GRASS_REQUIRE_ALL_PLATFORMS: "1"
+        run: |
+          set -euo pipefail
+          scripts/build-release.sh
+          version="${{ steps.version.outputs.version }}"
+          for platform in mac_x64 win_x64 lin_x64; do
+            test -f "dist/zoal-grass/${platform}/zoal-grass.xpl"
+          done
+          test -f dist/zoal-grass/resources/grass_art.txt
+          test -f dist/zoal-grass/resources/textures/zg_atlas_summer.png
+          test -f dist/zoal-grass/licenses/XPGrass-LICENSE.txt
+          cd dist && zip -qr "zoal-grass-${version}.zip" zoal-grass
+          unzip -l "zoal-grass-${version}.zip" | tail -3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zoal-grass-${{ steps.version.outputs.version }}
+          path: dist/zoal-grass-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+      # Only a tag publishes; workflow_dispatch rehearses the same archive as an artifact.
+      - name: Publish release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          previous="$(git describe --tags --abbrev=0 "${version}^" 2>/dev/null || true)"
+          {
+            echo "Unzip and drop the \`zoal-grass\` folder into \`<X-Plane 12>/Resources/plugins/\`."
+            echo "Settings are under **Plugins → zoal-grass**."
+            if [ -n "${previous}" ]; then
+              echo
+              echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${version}"
+            fi
+          } > release-notes.md
+          gh release create "${version}" "dist/zoal-grass-${version}.zip" --title "${version}" --notes-file release-notes.md

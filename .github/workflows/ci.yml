@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Each platform only builds on itself, so "does it compile" is three jobs. The core tests (apt.dat parsing, pavement
+# mask, airport index, grass object generation for every style) need no X-Plane and run everywhere.
+jobs:
+  build:
+    name: Build and test (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac_x64
+          - os: windows-latest
+            platform: win_x64
+          - os: ubuntu-latest
+            platform: lin_x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Provision the X-Plane SDK
+        shell: bash
+        run: scripts/ensure-deps.sh
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake -S . -B build-plugin -DCMAKE_BUILD_TYPE=Release -DZOAL_GRASS_BUILD_TOOLS=ON
+          cmake --build build-plugin --config Release
+
+      - name: Test
+        shell: bash
+        run: ctest --test-dir build-plugin -C Release --output-on-failure
+
+      - name: Check the binary exists where packaging looks for it
+        shell: bash
+        run: test -f "build-plugin/${{ matrix.platform }}/zoal-grass.xpl"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zoal-grass-${{ matrix.platform }}
+          path: build-plugin/${{ matrix.platform }}/zoal-grass.xpl
+          if-no-files-found: error
+          retention-days: 7
+
+  checks:
+    name: Scripts and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck scripts/*.sh
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check tools/

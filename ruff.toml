@@ -1,0 +1,8 @@
+# tools/ holds the two build-time Python scripts (bake_art.py, preview_blender.py); neither has dependencies
+# beyond the standard library (and Blender's bpy for the preview).
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = ["B905"]   # zip(strict=) adds nothing for these fixed-size tuples

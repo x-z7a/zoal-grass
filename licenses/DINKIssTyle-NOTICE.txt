@@ -1,0 +1,6 @@
+The grass art in resources/ (textures/zg_atlas_*.png and grass_art.txt) is derived from
+"DINKIssTyle 3D Grass" (DINKIssTyle_LIB_Grass, 2023-04-03) by DINKIssTyle:
+  - 3D_Grass_7.dds / 3D_Grass_7_NRM.png and Lawn07.for (tuft sprites, blade strip)
+  - 3D_Grass.dds / 3D_Grass_NRM.png and Lawn06_S_Flower01.for (flower plants)
+tools/bake_art.py builds those files from the original library. All rights to the original art remain with
+DINKIssTyle; check the original download's terms before redistributing.
