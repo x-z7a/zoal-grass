@@ -16,7 +16,7 @@ namespace zg {
 namespace {
 
 const char* kNormal = "zg_atlas_NRM.png";
-const char* kBuildVersion = "species-4";  // part of the object file names: bump when the geometry code changes
+const char* kBuildVersion = "species-5";  // part of the object file names: bump when the geometry code changes
 constexpr double kPi2 = 6.283185307179586;
 constexpr double kUpBias = 0.45;          // blade normals lean up this much (soft lighting, no glowing flat cards)
 constexpr double kCardUpBias = 0.78;      // card normals: lit almost like the ground they stand on
@@ -184,12 +184,13 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
     for (auto& f : flowers_)
         if (p.flower_mask & (1u << f.type)) flower_pool.push_back(&f);
 
-    // levels: 0 [0, detail) 1 [detail, near) 2 [near, mid) 3 [mid, far); without real blades level 1 is unused and
-    // level 0 reaches lod_near (0 and 2 then differ only in how many flowers they carry)
+    // Levels: 0 [0, detail) 1 [detail, near) 2 [near, mid) 3 [mid, far). Without real blades only 0 [0, near) and
+    // 2 [near, far) exist and differ only in their flowers: the grass has one density at every distance. X-Plane scales
+    // LOD distances with the zoom, so any thinner far level would visibly fill in whenever the user zooms.
     const bool rb = p.real_blades;
     const double detail = rb ? p.lod_near * kDetailShare : p.lod_near;
     const double lod_lo[kLods] = {0, detail, p.lod_near, p.lod_mid};
-    const double lod_hi[kLods] = {detail, p.lod_near, p.lod_mid, p.lod_far};
+    const double lod_hi[kLods] = {detail, p.lod_near, rb ? p.lod_mid : p.lod_far, p.lod_far};
 
     out = BuiltObjects();
     // mowed: short turf with blades, lawn clumps and the flat weeds only
@@ -478,13 +479,16 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
                                    std::max(-F / 2, std::min(F / 2, centres[size_t(pc)].second + std::sin(ang) * rr)),
                                    U(rng) * kPi2, kFlowerScale * hs * (0.8 + 0.4 * U(rng)), fl});
                 }
-                const double share[kLods] = {1.0, 1.0, 0.3, 0.0};   // dots beyond lod_near: a third suffice
+                const double share[kLods] = {1.0, 1.0, 0.6, 0.0};   // beyond lod_near: a gentle thinning
                 for (int L = 0; L < kLods; ++L)
                     for (int k = 0; k < int(nf * share[L]); ++k)
                         flower(L, fps[size_t(k)].x, fps[size_t(k)].z, fps[size_t(k)].yaw, fps[size_t(k)].s, *fps[size_t(k)].f);
             }
 
-            if (!rb) m.idx[1].clear();                          // level 1 only exists with real blades
+            if (!rb) {                                          // levels 1 and 3 only exist with real blades
+                m.idx[1].clear();
+                m.idx[3].clear();
+            }
             size_t total = 0;
             for (auto& v : m.idx) total += v.size();
             char name[96];
@@ -515,7 +519,7 @@ bool GrassAssets::build(const std::string& resources_dir, const std::string& out
             f << '\n';
             size_t offset = 0;
             for (int L = 0; L < kLods; ++L) {
-                if (!rb && L == 1) continue;
+                if (!rb && (L == 1 || L == 3)) continue;
                 f << "ATTR_LOD " << int(lod_lo[L]) << ' ' << int(lod_hi[L]) << '\n';
                 if (p.gpu) f << "ATTR_no_cull\n";
                 if (!m.idx[L].empty()) f << "TRIS " << offset << ' ' << m.idx[L].size() << '\n';

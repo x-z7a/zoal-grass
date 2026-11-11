@@ -119,10 +119,9 @@ int main(int argc, char** argv) {
         std::string dir = scratch + "/objs_" + st.name + "_" + kBiomes[biome].name;
         CHECK(assets.build(resources, dir, p, out, [](const std::string& m) { std::printf("  %s\n", m.c_str()); }));
         CHECK(out.normal.size() == 4 && out.mowed.size() == 4);
-        CHECK(out.tris[0] >= out.tris[2] && out.tris[2] > out.tris[3] && out.tris[3] > 0 && out.tris[1] == 0);
+        CHECK(out.tris[0] >= out.tris[2] && out.tris[2] > 0 && out.tris[1] == 0 && out.tris[3] == 0);
         CHECK(out.tris[0] < 3000);
-        CHECK(out.tris[2] < 1500);                    // the 40 .. 140 m ring holds most clumps: keep it cheap
-        CHECK(out.tris[3] < 600);
+        CHECK(out.tris[2] < 2500);                    // beyond 40 m: nearly every clump, keep it cheap
         std::printf("%-12s %-13s triangles per level %d/%d/%d/%d, %d plant cards\n", st.name, kBiomes[biome].name,
                     out.tris[0], out.tris[1], out.tris[2], out.tris[3], out.cards);
         if (!out.normal.empty()) {
@@ -130,8 +129,8 @@ int main(int argc, char** argv) {
             CHECK(obj.rfind("A\n800\nOBJ\n", 0) == 0);
             CHECK(obj.find("TEXTURE " + std::string(st.texture)) != std::string::npos);
             CHECK(obj.find("ATTR_LOD 0 40") != std::string::npos);
-            CHECK(obj.find("ATTR_LOD 40 140") != std::string::npos);
-            CHECK(obj.find("ATTR_LOD 140 390") != std::string::npos);
+            CHECK(obj.find("ATTR_LOD 40 390") != std::string::npos);   // one density out to the grass edge
+            CHECK(obj.find("ATTR_LOD 140") == std::string::npos);
             CHECK(obj.find("ATTR_LOD 0 16") == std::string::npos);
             CHECK(obj.find('\r') == std::string::npos);
             CHECK(is_file(dir + "/" + st.texture));
