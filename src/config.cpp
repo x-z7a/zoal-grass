@@ -61,13 +61,12 @@ const Field kFields[] = {
     F_STR(dsf_allow_words, "comma separated words: a .pol/.lin library path containing one is never pavement"),
     F_STR(style, "season / style: auto (from date, position and climate), spring, summer, late_summer, autumn, winter, custom"),
     F_STR(biome, "plants: auto (from the Koppen climate at the aircraft position), temperate, continental, mediterranean, steppe, desert, tropical, savanna, tundra"),
-    F_NUM(flowers, "factor on the style's flower density (0 = no flowers, 1 = normal, up to 3)"),
     F_NUM(grass_height_cm, "average grass height, centimetres (5 .. 80)"),
     F_NUM(density, "tuft density factor (0.2 .. 2.0); higher is lusher and costs more GPU"),
     F_NUM(dry_mix, "custom style only: fraction of tufts drawn with the dry/yellow texture (0 .. 1)"),
     F_NUM(width_scale, "extra horizontal tuft scale (0.5 .. 2.0)"),
-    F_NUM(lod_near_m, "real 3D grass blades within this camera distance, metres (cards beyond)"),
-    F_NUM(lod_mid_m, "reduced-detail grass within this camera distance; sparse beyond"),
+    F_NUM(lod_near_m, "real_blades only: 3D blades within this camera distance, metres"),
+    F_NUM(lod_mid_m, "real_blades only: full plant cards within this camera distance, fewer beyond"),
     F_BOOL(real_blades, "add the DINKIssTyle-coloured 3D blades close up (more triangles; else the same Blender grass at every distance)"),
     F_BOOL(optimize_for_gpu, "false: two-sided meshes that X-Plane hardware-instances (CPU friendly); true: ATTR_no_cull meshes with half the triangles"),
     F_BOOL(cast_shadows, "let the grass cast shadows (costly)"),
@@ -92,7 +91,6 @@ void Settings::clamp() {
     width_scale = clampv(width_scale, 0.5, 2.0);
     lod_near_m = clampv(lod_near_m, 10.0, 1000.0);
     lod_mid_m = clampv(lod_mid_m, lod_near_m + 10.0, 3000.0);
-    flowers = clampv(flowers, 0.0, 3.0);
     style = lower(trim(style));
     if (style != "auto" && !find_style(style)) style = "auto";
     biome = lower(trim(biome));
@@ -138,7 +136,7 @@ Settings load_settings(const std::string& path, std::vector<std::string>& warnin
                 *reinterpret_cast<std::string*>(base) = val;
             }
         }
-        if (!known) warnings.push_back("unknown setting " + key);
+        if (!known && key != "flowers") warnings.push_back("unknown setting " + key);   // flowers: retired
     }
     s.clamp();
     return s;
@@ -174,7 +172,7 @@ bool mask_changed(const Settings& a, const Settings& b) {
 }
 
 bool look_changed(const Settings& a, const Settings& b) {
-    return a.style != b.style || a.biome != b.biome || a.flowers != b.flowers || a.grass_height_cm != b.grass_height_cm || a.density != b.density || a.dry_mix != b.dry_mix ||
+    return a.style != b.style || a.biome != b.biome || a.grass_height_cm != b.grass_height_cm || a.density != b.density || a.dry_mix != b.dry_mix ||
            a.width_scale != b.width_scale || a.lod_near_m != b.lod_near_m || a.lod_mid_m != b.lod_mid_m ||
            a.optimize_for_gpu != b.optimize_for_gpu || a.real_blades != b.real_blades || a.cast_shadows != b.cast_shadows ||
            a.normal_map != b.normal_map || a.spacing_m != b.spacing_m || a.radius_m != b.radius_m;

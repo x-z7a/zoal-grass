@@ -93,49 +93,48 @@ SpeciesMix species_mix(int biome, const std::string& style) {
         default:
         case kTemperate:
             m.meadow = 0.30; m.seed = 0.06; m.seed_wild = 0.2; m.tussock = 0.02; m.tussock_dry = 0.3; m.moss = 0.01;
-            m.sedge = 0.02; m.clover = 0.35; m.rosette = 0.15; m.dandelion = 0.10;
+            m.sedge = 0.02; m.clover = 0.35; m.rosette = 0.15;
             break;
         case kContinental:
             m.meadow = 0.30; m.seed = 0.08; m.seed_wild = 0.2; m.tussock = 0.04; m.tussock_dry = 0.3; m.moss = 0.05;
-            m.sedge = 0.05; m.clover = 0.25; m.rosette = 0.12; m.dandelion = 0.10;
+            m.sedge = 0.05; m.clover = 0.25; m.rosette = 0.12;
             break;
         case kMediterranean:
             m.blades = 0.85; m.height = 1.1; m.meadow = 0.12; m.seed = 0.35; m.seed_wild = 0.7; m.tussock = 0.12;
-            m.tussock_dry = 0.5; m.sedge = 0.01; m.clover = 0.12; m.rosette = 0.10; m.dandelion = 0.04; m.flowers = 1.2;
+            m.tussock_dry = 0.5; m.sedge = 0.01; m.clover = 0.12; m.rosette = 0.10;
             break;
         case kSteppe:
             m.blades = 0.55; m.height = 1.1; m.meadow = 0.04; m.seed = 0.30; m.seed_wild = 0.6; m.tussock = 0.45;
-            m.tussock_dry = 0.6; m.sedge = 0.01; m.clover = 0.02; m.rosette = 0.05; m.flowers = 0.4;
+            m.tussock_dry = 0.6; m.sedge = 0.01; m.clover = 0.02; m.rosette = 0.05;
             break;
         case kDesert:
             m.blades = 0.22; m.height = 0.9; m.seed = 0.05; m.seed_wild = 0.8; m.tussock = 0.25; m.tussock_dry = 0.8;
-            m.rosette = 0.02; m.flowers = 0.1;
+            m.rosette = 0.02;
             break;
         case kTropical:
             m.blades = 1.15; m.height = 1.3; m.meadow = 0.15; m.seed = 0.10; m.seed_wild = 0.3; m.tussock = 0.05;
-            m.tussock_dry = 0.1; m.moss = 0.02; m.sedge = 0.10; m.clover = 0.08; m.rosette = 0.05; m.flowers = 0.6;
+            m.tussock_dry = 0.1; m.moss = 0.02; m.sedge = 0.10; m.clover = 0.08; m.rosette = 0.05;
             break;
         case kSavanna:
             m.blades = 0.9; m.height = 1.5; m.meadow = 0.08; m.seed = 0.50; m.seed_wild = 0.6; m.tussock = 0.25;
-            m.tussock_dry = 0.5; m.sedge = 0.03; m.clover = 0.02; m.rosette = 0.03; m.flowers = 0.3;
+            m.tussock_dry = 0.5; m.sedge = 0.03; m.clover = 0.02; m.rosette = 0.03;
             break;
         case kTundra:
             m.blades = 0.7; m.height = 0.6; m.meadow = 0.04; m.tussock = 0.15; m.tussock_dry = 0.4; m.moss = 0.5;
-            m.sedge = 0.15; m.rosette = 0.02; m.dandelion = 0.02; m.flowers = 0.5;
+            m.sedge = 0.15; m.rosette = 0.02;
             break;
     }
-    // the season: panicles and seed heads come later in the year, dandelions and clover flower early
+    // the season: panicles and seed heads come later in the year
     if (style == "spring") {
-        m.meadow *= 0.5; m.seed *= 0.2; m.dandelion *= 2.0; m.clover_flowers = 0.3;
+        m.meadow *= 0.5; m.seed *= 0.2;
     } else if (style == "late_summer") {
-        m.meadow *= 0.8; m.seed *= 1.3; m.dandelion *= 0.15; m.clover_flowers = 0.2;
-        m.tussock_dry = std::fmin(1.0, m.tussock_dry + 0.2);
+        m.meadow *= 0.8; m.seed *= 1.3; m.tussock_dry = std::fmin(1.0, m.tussock_dry + 0.2);
     } else if (style == "autumn") {
-        m.meadow *= 0.5; m.dandelion = 0; m.tussock_dry = std::fmin(1.0, m.tussock_dry + 0.3);
+        m.meadow *= 0.5; m.tussock_dry = std::fmin(1.0, m.tussock_dry + 0.3);
     } else if (style == "winter") {
-        m.meadow *= 0.2; m.seed *= 0.5; m.dandelion = 0; m.clover *= 0.5; m.tussock_dry = 1.0;
+        m.meadow *= 0.2; m.seed *= 0.5; m.clover *= 0.5; m.tussock_dry = 1.0;
     } else {                                                    // summer, custom
-        m.seed *= 0.6; m.dandelion *= 0.6; m.clover_flowers = 0.5;
+        m.seed *= 0.6;
     }
     return m;
 }

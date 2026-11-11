@@ -167,8 +167,6 @@ bool GrassManager::rebuild_objects() {
     p.density = settings_.density;
     p.dry_mix = st->dry_mix >= 0 ? st->dry_mix : settings_.dry_mix;
     p.texture = st->texture;
-    p.flowers_per_m2 = st->flowers_per_m2 * settings_.flowers;
-    p.flower_mask = st->flower_mask;
     p.width_scale = settings_.width_scale;
     p.footprint_m = settings_.spacing_m * kFootprintOverlap;
     p.lod_near = settings_.lod_near_m;
@@ -203,11 +201,11 @@ bool GrassManager::rebuild_objects() {
     built_ = built;
     char buf[256];
     std::snprintf(buf, sizeof buf,
-                  "built %zu grass objects, style %s%s, %s plants (Koppen %s): %.0f cm, %d blade tufts + %d plant cards + "
-                  "%d flowers per %.1f m clump, triangles per level %d/%d/%d/%d (%s)",
+                  "built %zu grass objects, style %s%s, %s plants (Koppen %s): %.0f cm, %d blade tufts + %d plant cards "
+                  "per %.1f m clump, triangles per level %d/%d/%d/%d (%s)",
                   normal_objs_.size() + mowed_objs_.size(), active_style_.c_str(),
                   settings_.style == "auto" ? " (auto)" : "", active_biome_.c_str(), koppen_symbol(active_koppen_),
-                  p.height_m * p.mix.height * 100, built.tufts, built.cards, built.flowers, p.footprint_m, built.tris[0],
+                  p.height_m * p.mix.height * 100, built.tufts, built.cards, p.footprint_m, built.tris[0],
                   built.tris[1], built.tris[2], built.tris[3], p.gpu ? "GPU mode" : "CPU mode");
     log(buf);
     return !normal_objs_.empty();

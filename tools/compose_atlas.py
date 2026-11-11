@@ -7,9 +7,9 @@
 The atlas grows from 1024 x 512 (the DINKIssTyle art of tools/bake_art.py) to 2048 x 1024: the original art stays in
 the bottom-left quarter (its UVs are halved) and the species sprites are shelf-packed into the rest, including the left
 half of that quarter (the Lawn07 tuft sprites and fringe strip, no longer used: their SPRITE / STRIP lines are dropped).
-The blade colour strip and the flower sprites (right half of the original art) are kept. Each sprite is graded
-per season with bake_art's grading, and its colour is bled into the transparent pixels so mipmaps do not darken the
-cut-out edges. grass_art.txt becomes ZGART 3 with one CARD line per sprite:
+The blade colour strip (right half of the original art) is kept; the DINKIssTyle flower plants are dropped.
+Each sprite is graded per season with bake_art's grading, and its colour is bled into the transparent pixels so
+mipmaps do not darken the cut-out edges. grass_art.txt becomes ZGART 3 with one CARD line per sprite:
 
     CARD name side|top u_left v_base u_right v_top width_m height_m
 
@@ -170,7 +170,8 @@ def main(sprite_dir, res):
     out = ["ZGART 3", "ATLAS %d %d" % (AW, AH)]
     for line in lines[1:]:
         t = line.split()
-        if not t or t[0] in ("ATLAS", "CARD", "SPRITE", "STRIP") or line.startswith(("# CARD", "# SPRITE", "# STRIP")):
+        if not t or t[0] in ("ATLAS", "CARD", "SPRITE", "STRIP", "FLOWER", "V", "I") or line.startswith(
+                ("# CARD", "# SPRITE", "# STRIP")):
             continue
         if old and t[0] == "BLADE":
             line = "%s %s %s" % (t[0], t[1], " ".join("%.5f" % (float(v) * 0.5) for v in t[2:6]))
