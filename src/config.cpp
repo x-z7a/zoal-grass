@@ -43,7 +43,7 @@ struct Field {
 #define F_STR(n, c) {#n, Kind::Str, offsetof(Settings, n), c}
 
 const Field kFields[] = {
-    F_BOOL(enabled, "master switch (also in Plugins > zoal-grass)"),
+    F_BOOL(enabled, "master switch (also in Plugins > zoal-grass > Settings)"),
     F_NUM(radius_m, "grass appears within this many metres of the aircraft"),
     F_NUM(hysteresis_m, "grass is removed only once it is this much further away (stops flicker at the edge)"),
     F_NUM(spacing_m, "distance between clumps on the placement grid, metres (each clump covers slightly more)"),
@@ -78,6 +78,7 @@ const Field kFields[] = {
     F_BOOL(cast_shadows, "let the grass cast shadows (costly)"),
     F_BOOL(normal_map, "use the DINKIssTyle normal map"),
     F_BOOL(log_stats, "write a status line to Log.txt every 30 s"),
+    F_STR(ui_theme, "settings window theme: graphite (dark, default), daylight (light) or night (dim)"),
 };
 
 }  // namespace
@@ -103,6 +104,8 @@ void Settings::clamp() {
     osm_cache_days = clampv(osm_cache_days, 1.0, 3650.0);
     osm_overpass_url = trim(osm_overpass_url);
     if (osm_overpass_url.rfind("http", 0) != 0) osm_overpass_url = "https://overpass-api.de/api/interpreter";
+    ui_theme = lower(trim(ui_theme));
+    if (ui_theme != "daylight" && ui_theme != "night") ui_theme = "graphite";
     biome = lower(trim(biome));
     if (biome != "auto" && find_biome(biome) < 0) biome = "auto";
 }
@@ -152,11 +155,24 @@ Settings load_settings(const std::string& path, std::vector<std::string>& warnin
     return s;
 }
 
+bool settings_equal(const Settings& a, const Settings& b) {
+    for (const Field& f : kFields) {
+        const char* pa = reinterpret_cast<const char*>(&a) + f.offset;
+        const char* pb = reinterpret_cast<const char*>(&b) + f.offset;
+        bool same = f.kind == Kind::Bool  ? *reinterpret_cast<const bool*>(pa) == *reinterpret_cast<const bool*>(pb)
+                    : f.kind == Kind::Num ? *reinterpret_cast<const double*>(pa) == *reinterpret_cast<const double*>(pb)
+                                          : *reinterpret_cast<const std::string*>(pa) ==
+                                                *reinterpret_cast<const std::string*>(pb);
+        if (!same) return false;
+    }
+    return true;
+}
+
 bool save_settings(const std::string& path, const Settings& s) {
     std::ofstream out(fs_path(path), std::ios::trunc);
     if (!out) return false;
-    out << "; zoal-grass settings. Edit, save, then use Plugins > zoal-grass > Reload settings (or restart X-Plane).\n"
-           "; Plugins > zoal-grass > Save settings writes the values currently in use back to this file.\n\n[grass]\n";
+    out << "; zoal-grass settings. Edit, save, then Reload in Plugins > zoal-grass > Settings (or restart X-Plane).\n"
+           "; Save in the settings window writes the values currently in use back to this file.\n\n[grass]\n";
     for (const Field& f : kFields) {
         const char* base = reinterpret_cast<const char*>(&s) + f.offset;
         out << "; " << f.comment << "\n" << f.name << " = ";

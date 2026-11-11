@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Lay out dist/zoal-grass exactly as it goes into <X-Plane 12>/Resources/plugins/:
-#   zoal-grass/{mac_x64,win_x64,lin_x64}/zoal-grass.xpl, resources/, licenses/, README.md
+#   zoal-grass/{mac_x64,win_x64,lin_x64}/zoal-grass.xpl, resources/, fonts/, licenses/, README.md
 # Binaries are taken from build-plugin/<platform>/zoal-grass.xpl (CI puts each runner's build there).
 # ZOAL_GRASS_REQUIRE_ALL_PLATFORMS=1 fails when one is missing, so a release never ships a platform short.
 
@@ -30,5 +30,14 @@ if [ "${found}" -eq 0 ]; then
 fi
 cp -R "${repo_root}/resources" "${dist}/resources"
 cp -R "${repo_root}/licenses" "${dist}/licenses"
+# the settings window's typeface (scripts/ensure-deps.sh fetches it, pinned in scripts/inter-version.txt)
+inter_version="$(cut -d' ' -f1 < "${repo_root}/scripts/inter-version.txt" | tr -d '\r')"
+inter="${repo_root}/.cache/inter-${inter_version}"
+if [ ! -f "${inter}/Inter-Regular.ttf" ]; then
+  echo "Inter ${inter_version} not in ${inter}; run scripts/ensure-deps.sh" >&2
+  exit 1
+fi
+mkdir -p "${dist}/fonts"
+cp "${inter}/Inter-Regular.ttf" "${inter}/Inter-SemiBold.ttf" "${inter}/Inter-Bold.ttf" "${dist}/fonts/"
 cp "${repo_root}/README.md" "${dist}/README.md"
 echo "Packaged ${found} platform(s) into ${dist}"

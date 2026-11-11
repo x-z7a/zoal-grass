@@ -90,6 +90,9 @@ jobs:
             cp "artifacts/plugin-${platform}/zoal-grass.xpl" "build-plugin/${platform}/"
           done
 
+      - name: Fetch the settings window's font
+        run: scripts/ensure-deps.sh
+
       - name: Package
         env:
           ZOAL_GRASS_REQUIRE_ALL_PLATFORMS: "1"
@@ -104,6 +107,8 @@ jobs:
           test -f dist/zoal-grass/resources/climate_kg.bin
           test -f dist/zoal-grass/resources/textures/zg_atlas_summer.png
           test -f dist/zoal-grass/licenses/XPGrass-LICENSE.txt
+          test -f dist/zoal-grass/fonts/Inter-Regular.ttf
+          test -f dist/zoal-grass/licenses/Inter-LICENSE.txt
           cd dist && zip -qr "zoal-grass-${version}.zip" zoal-grass
           unzip -l "zoal-grass-${version}.zip" | tail -3
 
@@ -125,7 +130,7 @@ jobs:
           previous="$(git describe --tags --abbrev=0 "${version}^" 2>/dev/null || true)"
           {
             echo "Unzip and drop the \`zoal-grass\` folder into \`<X-Plane 12>/Resources/plugins/\`."
-            echo "Settings are under **Plugins → zoal-grass**."
+            echo "Needs X-Plane 12.4.4 or newer. Settings: **Plugins → zoal-grass → Settings**."
             if [ -n "${previous}" ]; then
               echo
               echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${version}"

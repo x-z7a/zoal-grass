@@ -1,21 +1,21 @@
 // zoal-grass: native X-Plane 12 plugin that grows 3D grass (DINKIssTyle lawn art) on unpaved airport ground.
-// Placement logic ported from XPGrass by Tor Jakobsen (MIT).
+// Placement logic ported from XPGrass by Tor Jakobsen (MIT). Needs X-Plane 12.4.4 (SDK 4.4: the settings window is
+// drawn by its panel graphics).
 #include <XPLMDataAccess.h>
 #include <XPLMMenus.h>
 #include <XPLMPlugin.h>
 #include <XPLMProcessing.h>
 #include <XPLMUtilities.h>
 
-#include <cmath>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "config.h"
-#include "manager.h"
 #include "biome.h"
-#include "style.h"
+#include "config.h"
+#include "gui/settings_window.h"
+#include "manager.h"
 
 using namespace zg;
 
@@ -26,114 +26,19 @@ namespace
     std::string g_plugin_dir, g_ini;
     XPLMFlightLoopID g_loop = nullptr;
     XPLMMenuID g_menu = nullptr;
-    XPLMCommandRef g_cmd_toggle = nullptr, g_cmd_reload = nullptr;
-
-    const double kRadii[] = {200, 300, 400, 800, 1600};
-    const double kSpacings[] = {3.0, 3.5, 4.5, 6.0, 8.0};
-    const char *kSpacingNames[] = {"3.0 m (lush)", "3.5 m", "4.5 m (default)", "6 m", "8 m (light)"};
-    const double kHeights[] = {10, 15, 25, 35, 50};
-    const double kDensities[] = {0.5, 0.75, 1.0, 1.3};
-    const double kDry[] = {0.0, 0.15, 0.35, 0.7};
-    const char *kDryNames[] = {"Green", "Mostly green", "Half dry", "Dry"};
-
-    enum Item : intptr_t
-    {
-        kEnabled = 1,
-        kDirt,
-        kGravel,
-        kTurf,
-        kDsf,
-        kOutside,
-        kGpu,
-        kShadows,
-        kNormal,
-        kBlades,
-        kWind,
-        kOsm,
-        kReload,
-        kSave,
-        kStatus,
-        kRadiusBase = 100,
-        kSpacingBase = 200,
-        kHeightBase = 300,
-        kDensityBase = 400,
-        kDryBase = 500,
-        kStyleBase = 600, // +0 = auto, +1.. = kStyles
-        kBiomeBase = 800, // +0 = auto, +1.. = kBiomes
-    };
-
-    struct MenuRef
-    {
-        XPLMMenuID menu;
-        int index;
-        intptr_t id;
-    };
-    std::vector<MenuRef> g_items;
+    XPLMCommandRef g_cmd_toggle = nullptr, g_cmd_reload = nullptr, g_cmd_settings = nullptr;
 
     void log_line(const std::string &m) { XPLMDebugString(("zoal-grass: " + m + "\n").c_str()); }
 
-    void add_item(XPLMMenuID menu, const char *name, intptr_t id)
-    {
-        int idx = XPLMAppendMenuItem(menu, name, reinterpret_cast<void *>(id), 0);
-        g_items.push_back({menu, idx, id});
-    }
-
-    void sync_menu()
+    void apply(Settings s)
     {
         if (!g_mgr)
             return;
-        const Settings &s = g_mgr->settings();
-        auto same = [](double a, double b)
-        { return std::fabs(a - b) < 1e-6; };
-        for (auto &it : g_items)
-        {
-            bool on = false;
-            intptr_t id = it.id;
-            if (id >= kBiomeBase)
-                on = id == kBiomeBase ? s.biome == "auto" : s.biome == kBiomes[id - kBiomeBase - 1].name;
-            else if (id >= kStyleBase)
-                on = id == kStyleBase ? s.style == "auto" : s.style == kStyles[id - kStyleBase - 1].name;
-            else if (id >= kDryBase)
-                on = s.style == "custom" && same(s.dry_mix, kDry[id - kDryBase]);
-            else if (id >= kDensityBase)
-                on = same(s.density, kDensities[id - kDensityBase]);
-            else if (id >= kHeightBase)
-                on = same(s.grass_height_cm, kHeights[id - kHeightBase]);
-            else if (id >= kSpacingBase)
-                on = same(s.spacing_m, kSpacings[id - kSpacingBase]);
-            else if (id >= kRadiusBase)
-                on = same(s.radius_m, kRadii[id - kRadiusBase]);
-            else if (id == kEnabled)
-                on = s.enabled;
-            else if (id == kDirt)
-                on = s.grass_on_dirt;
-            else if (id == kGravel)
-                on = s.grass_on_gravel;
-            else if (id == kTurf)
-                on = s.grass_on_turf_runways;
-            else if (id == kDsf)
-                on = s.use_dsf_polygons;
-            else if (id == kOutside)
-                on = s.grass_outside_airport;
-            else if (id == kGpu)
-                on = s.optimize_for_gpu;
-            else if (id == kShadows)
-                on = s.cast_shadows;
-            else if (id == kNormal)
-                on = s.normal_map;
-            else if (id == kBlades)
-                on = s.real_blades;
-            else if (id == kWind)
-                on = s.wind_sway;
-            else if (id == kOsm)
-                on = s.use_osm_roads;
-            else
-                continue;
-            XPLMCheckMenuItem(it.menu, it.index, on ? xplm_Menu_Checked : xplm_Menu_Unchecked);
-        }
+        s.clamp();
+        g_mgr->apply_settings(s);
     }
 
-    void reload_settings()
+    Settings reload_settings()
     {
         std::vector<std::string> warnings;
         Settings s = load_settings(g_ini, warnings);
@@ -142,141 +47,60 @@ namespace
         if (g_mgr)
             g_mgr->apply_settings(s, true);
         log_line("settings reloaded from " + g_ini);
+        return s;
     }
 
-    void menu_handler(void *, void *ref)
-    {
-        if (!g_mgr)
-            return;
-        intptr_t id = reinterpret_cast<intptr_t>(ref);
-        Settings s = g_mgr->settings();
-        if (id >= kBiomeBase)
-            s.biome = id == kBiomeBase ? "auto" : kBiomes[id - kBiomeBase - 1].name;
-        else if (id >= kStyleBase)
-            s.style = id == kStyleBase ? "auto" : kStyles[id - kStyleBase - 1].name;
-        else if (id >= kDryBase)
-        {
-            s.dry_mix = kDry[id - kDryBase];
-            s.style = "custom";
-        }
-        else if (id >= kDensityBase)
-            s.density = kDensities[id - kDensityBase];
-        else if (id >= kHeightBase)
-            s.grass_height_cm = kHeights[id - kHeightBase];
-        else if (id >= kSpacingBase)
-            s.spacing_m = kSpacings[id - kSpacingBase];
-        else if (id >= kRadiusBase)
-            s.radius_m = kRadii[id - kRadiusBase];
-        else
-            switch (id)
-            {
-            case kEnabled:
-                s.enabled = !s.enabled;
-                break;
-            case kDirt:
-                s.grass_on_dirt = !s.grass_on_dirt;
-                break;
-            case kGravel:
-                s.grass_on_gravel = !s.grass_on_gravel;
-                break;
-            case kTurf:
-                s.grass_on_turf_runways = !s.grass_on_turf_runways;
-                break;
-            case kDsf:
-                s.use_dsf_polygons = !s.use_dsf_polygons;
-                break;
-            case kOutside:
-                s.grass_outside_airport = !s.grass_outside_airport;
-                break;
-            case kGpu:
-                s.optimize_for_gpu = !s.optimize_for_gpu;
-                break;
-            case kShadows:
-                s.cast_shadows = !s.cast_shadows;
-                break;
-            case kNormal:
-                s.normal_map = !s.normal_map;
-                break;
-            case kBlades:
-                s.real_blades = !s.real_blades;
-                break;
-            case kWind:
-                s.wind_sway = !s.wind_sway;
-                break;
-            case kOsm:
-                s.use_osm_roads = !s.use_osm_roads;
-                break;
-            case kReload:
-                reload_settings();
-                sync_menu();
-                return;
-            case kSave:
-                log_line(save_settings(g_ini, s) ? "settings saved to " + g_ini : "could not save " + g_ini);
-                return;
-            case kStatus:
-                log_line(g_mgr->status());
-                return;
-            default:
-                return;
-            }
-        s.clamp();
-        g_mgr->apply_settings(s);
-        sync_menu();
-    }
+    // Plugins > zoal-grass: one item, the settings window. Everything else, the on / off switch included, is in it.
+    void menu_handler(void *, void *) { gui::toggle_settings_window(); }
 
     void build_menu()
     {
         int item = XPLMAppendMenuItem(XPLMFindPluginsMenu(), "zoal-grass", nullptr, 0);
         g_menu = XPLMCreateMenu("zoal-grass", XPLMFindPluginsMenu(), item, menu_handler, nullptr);
-        add_item(g_menu, "Grass enabled", kEnabled);
-        XPLMAppendMenuSeparator(g_menu);
-        auto sub = [](const char *title)
+        XPLMAppendMenuItemWithCommand(g_menu, "Settings", g_cmd_settings);
+    }
+
+    bool start_gui(const std::string &xp_root)
+    {
+        gui::SettingsHost host;
+        host.plugin_dir = g_plugin_dir;
+        host.xp_root = xp_root;
+        host.version = ZOAL_GRASS_VERSION;
+        host.get = []
+        { return g_mgr ? g_mgr->settings() : Settings(); };
+        host.apply = apply;
+        host.save = [](const Settings &s)
         {
-            int i = XPLMAppendMenuItem(g_menu, title, nullptr, 0);
-            return XPLMCreateMenu(title, g_menu, i, menu_handler, nullptr);
+            bool ok = save_settings(g_ini, s);
+            log_line(ok ? "settings saved to " + g_ini : "could not save " + g_ini);
+            return ok;
         };
-        XPLMMenuID m = sub("Radius");
-        for (int i = 0; i < 5; ++i)
-            add_item(m, (std::to_string(int(kRadii[i])) + " m").c_str(), kRadiusBase + i);
-        m = sub("Clump spacing");
-        for (int i = 0; i < 5; ++i)
-            add_item(m, kSpacingNames[i], kSpacingBase + i);
-        m = sub("Grass height");
-        for (int i = 0; i < 5; ++i)
-            add_item(m, (std::to_string(int(kHeights[i])) + " cm").c_str(), kHeightBase + i);
-        m = sub("Tuft density");
-        const char *dn[] = {"Sparse", "Medium", "Full (default)", "Extra"};
-        for (int i = 0; i < 4; ++i)
-            add_item(m, dn[i], kDensityBase + i);
-        m = sub("Season / style");
-        add_item(m, "Auto (from date, position and climate)", kStyleBase);
-        for (int i = 0; i < kStyleCount; ++i)
-            add_item(m, kStyles[i].label, kStyleBase + 1 + i);
-        m = sub("Plants / biome");
-        add_item(m, "Auto (from the climate at your GPS position)", kBiomeBase);
-        for (int i = 0; i < kBiomeCount; ++i)
-            add_item(m, kBiomes[i].label, kBiomeBase + 1 + i);
-        m = sub("Custom grass colour");
-        for (int i = 0; i < 4; ++i)
-            add_item(m, kDryNames[i], kDryBase + i);
-        XPLMAppendMenuSeparator(g_menu);
-        add_item(g_menu, "Grass on dirt", kDirt);
-        add_item(g_menu, "Grass on gravel", kGravel);
-        add_item(g_menu, "Grass on turf runways", kTurf);
-        add_item(g_menu, "Keep grass off scenery roads and buildings", kDsf);
-        add_item(g_menu, "Keep grass off OpenStreetMap roads (online)", kOsm);
-        add_item(g_menu, "Grass outside the airport boundary", kOutside);
-        XPLMAppendMenuSeparator(g_menu);
-        add_item(g_menu, "Grass sways in the wind (experimental)", kWind);
-        add_item(g_menu, "Real 3D blades close up", kBlades);
-        add_item(g_menu, "Optimize for GPU (single-sided)", kGpu);
-        add_item(g_menu, "Grass casts shadows", kShadows);
-        add_item(g_menu, "Normal map", kNormal);
-        XPLMAppendMenuSeparator(g_menu);
-        add_item(g_menu, "Reload settings from zoal-grass.ini", kReload);
-        add_item(g_menu, "Save current settings to zoal-grass.ini", kSave);
-        add_item(g_menu, "Log status", kStatus);
-        sync_menu();
+        host.reload = []
+        {
+            reload_settings();
+            return g_mgr ? g_mgr->settings() : Settings();
+        };
+        host.status = []
+        {
+            gui::LiveStatus st;
+            if (!g_mgr)
+                return st;
+            st.enabled = g_mgr->settings().enabled;
+            st.style = g_mgr->active_style();
+            st.biome = g_mgr->active_biome();
+            st.koppen = koppen_symbol(g_mgr->active_koppen());
+            st.instances = g_mgr->instance_count();
+            st.airports = int(g_mgr->active_airports());
+            return st;
+        };
+        host.log_status = []
+        {
+            if (g_mgr)
+                log_line(g_mgr->status());
+        };
+        host.log = [](const std::string &m)
+        { log_line(m); };
+        return gui::start_settings_window(std::move(host));
     }
 
     float flight_loop(float since, float, int, void *)
@@ -288,12 +112,22 @@ namespace
 
     int cmd_handler(XPLMCommandRef cmd, XPLMCommandPhase phase, void *)
     {
-        if (phase != xplm_CommandBegin)
+        if (phase != xplm_CommandBegin || !g_mgr)
             return 1;
-        if (cmd == g_cmd_toggle)
-            menu_handler(nullptr, reinterpret_cast<void *>(intptr_t(kEnabled)));
+        if (cmd == g_cmd_settings)
+        {
+            gui::toggle_settings_window();
+        }
+        else if (cmd == g_cmd_toggle)
+        {
+            Settings s = g_mgr->settings();
+            s.enabled = !s.enabled;
+            apply(s);
+        }
         else if (cmd == g_cmd_reload)
-            menu_handler(nullptr, reinterpret_cast<void *>(intptr_t(kReload)));
+        {
+            reload_settings();
+        }
         return 1;
     }
 
@@ -343,28 +177,32 @@ PLUGIN_API int XPluginEnable()
     XPLMCreateFlightLoop_t fl{sizeof(XPLMCreateFlightLoop_t), xplm_FlightLoop_Phase_BeforeFlightModel, flight_loop, nullptr};
     g_loop = XPLMCreateFlightLoop(&fl);
     XPLMScheduleFlightLoop(g_loop, 1.0f, 1);
-    build_menu();
-    g_cmd_toggle = XPLMCreateCommand("zoal-grass/toggle", "zoal-grass: toggle grass");
-    g_cmd_reload = XPLMCreateCommand("zoal-grass/reload", "zoal-grass: reload settings");
+    g_cmd_settings = XPLMCreateCommand("zoal-grass/settings", "zoal-grass: show or hide the settings window");
+    g_cmd_toggle = XPLMCreateCommand("zoal-grass/toggle", "zoal-grass: turn the grass on or off");
+    g_cmd_reload = XPLMCreateCommand("zoal-grass/reload", "zoal-grass: reload settings from zoal-grass.ini");
+    XPLMRegisterCommandHandler(g_cmd_settings, cmd_handler, 1, nullptr);
     XPLMRegisterCommandHandler(g_cmd_toggle, cmd_handler, 1, nullptr);
     XPLMRegisterCommandHandler(g_cmd_reload, cmd_handler, 1, nullptr);
-    log_line("enabled, plugin folder " + g_plugin_dir);
+    build_menu();
+    if (!start_gui(xp_root))
+        log_line("the settings window could not be created; settings stay in " + g_ini);
+    log_line("enabled, plugin folder " + g_plugin_dir +
+             "; settings: Plugins > zoal-grass > Settings, or the zoal-grass/settings command");
     return 1;
 }
 
 PLUGIN_API void XPluginDisable()
 {
-    if (g_cmd_toggle)
-        XPLMUnregisterCommandHandler(g_cmd_toggle, cmd_handler, 1, nullptr);
-    if (g_cmd_reload)
-        XPLMUnregisterCommandHandler(g_cmd_reload, cmd_handler, 1, nullptr);
+    for (XPLMCommandRef c : {g_cmd_settings, g_cmd_toggle, g_cmd_reload})
+        if (c)
+            XPLMUnregisterCommandHandler(c, cmd_handler, 1, nullptr);
+    gui::stop_settings_window();
     if (g_loop)
         XPLMDestroyFlightLoop(g_loop);
     g_loop = nullptr;
     if (g_menu)
         XPLMDestroyMenu(g_menu);
     g_menu = nullptr;
-    g_items.clear();
     g_mgr.reset();
 }
 

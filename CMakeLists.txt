@@ -19,7 +19,7 @@ endif()
 
 option(ZOAL_GRASS_BUILD_TESTS "Build the X-Plane-free core tests" ON)
 set(ZOAL_GRASS_VERSION "dev" CACHE STRING "Version string compiled into the plugin")
-set(XPLANE_SDK_ROOT "${CMAKE_SOURCE_DIR}/.cache/sdk" CACHE PATH "X-Plane SDK root (scripts/ensure-deps.sh fetches it)")
+set(XPLANE_SDK_ROOT "${CMAKE_SOURCE_DIR}/.cache/sdk" CACHE PATH "X-Plane SDK 4.4 root (scripts/ensure-deps.sh fetches it)")
 set(XPLANE_ROOT "/Users/dzou/X-Plane 12" CACHE PATH "X-Plane folder used by the install_xplane target")
 
 if(APPLE)
@@ -89,17 +89,70 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ---------------------------------------------------------------- plugin
-if(NOT EXISTS "${XPLANE_SDK_ROOT}/CHeaders/XPLM/XPLMPlugin.h")
+if(NOT EXISTS "${XPLANE_SDK_ROOT}/CHeaders/XPLM/XPLMPanelGraphics.h")
     message(FATAL_ERROR
-        "X-Plane SDK not found at ${XPLANE_SDK_ROOT}. Run scripts/ensure-deps.sh, "
-        "or pass -DXPLANE_SDK_ROOT=/path/to/SDK.")
+        "X-Plane SDK 4.4 not found at ${XPLANE_SDK_ROOT}. Run scripts/ensure-deps.sh, "
+        "or pass -DXPLANE_SDK_ROOT=/path/to/SDK (4.4: X-Plane 12.4.4's panel graphics draw the settings window).")
 endif()
 
-add_library(zoal-grass MODULE src/plugin.cpp src/manager.cpp)
-target_link_libraries(zoal-grass PRIVATE zoal_grass_core)
+# ---- the settings window: Dear ImGui (core only; X-Plane 12.4.4's panel graphics render it) with FreeType fonts,
+# the same pinned sources as zoal-atc (scripts/ensure-deps.sh fetches them into .cache)
+function(zg_pin out file)
+    file(READ "${CMAKE_SOURCE_DIR}/scripts/${file}" pin)
+    string(REGEX MATCH "^[^ \r\n]+" pin "${pin}")
+    set(${out} "${pin}" PARENT_SCOPE)
+endfunction()
+zg_pin(ZG_IMGUI_VERSION imgui-version.txt)
+zg_pin(ZG_FREETYPE_VERSION freetype-version.txt)
+zg_pin(ZG_INTER_VERSION inter-version.txt)
+set(ZOAL_GRASS_IMGUI_SOURCE "${CMAKE_SOURCE_DIR}/.cache/imgui-${ZG_IMGUI_VERSION}" CACHE PATH "Dear ImGui source")
+set(ZOAL_GRASS_FREETYPE_SOURCE "${CMAKE_SOURCE_DIR}/.cache/freetype-${ZG_FREETYPE_VERSION}" CACHE PATH "FreeType source")
+set(ZOAL_GRASS_INTER "${CMAKE_SOURCE_DIR}/.cache/inter-${ZG_INTER_VERSION}" CACHE PATH "Inter font files")
+foreach(dep IMGUI_SOURCE/imgui.h FREETYPE_SOURCE/include/ft2build.h INTER/Inter-Regular.ttf)
+    string(REPLACE "/" ";" parts "${dep}")
+    list(GET parts 0 var)
+    list(REMOVE_AT parts 0)
+    string(REPLACE ";" "/" rel "${parts}")
+    if(NOT EXISTS "${ZOAL_GRASS_${var}}/${rel}")
+        message(FATAL_ERROR "${ZOAL_GRASS_${var}}/${rel} not found. Run scripts/ensure-deps.sh.")
+    endif()
+endforeach()
+foreach(d ZLIB BZIP2 PNG HARFBUZZ BROTLI)
+    set(FT_DISABLE_${d} ON CACHE BOOL "" FORCE)
+endforeach()
+set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
+add_subdirectory("${ZOAL_GRASS_FREETYPE_SOURCE}" "${CMAKE_BINARY_DIR}/freetype" EXCLUDE_FROM_ALL)
+set_target_properties(freetype PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set(IMGUI "${ZOAL_GRASS_IMGUI_SOURCE}")
+add_library(zg_imgui STATIC "${IMGUI}/imgui.cpp" "${IMGUI}/imgui_draw.cpp" "${IMGUI}/imgui_tables.cpp"
+    "${IMGUI}/imgui_widgets.cpp" "${IMGUI}/misc/freetype/imgui_freetype.cpp")
+target_include_directories(zg_imgui SYSTEM PUBLIC "${IMGUI}" "${IMGUI}/misc/freetype")
+target_compile_definitions(zg_imgui PUBLIC IMGUI_DISABLE_DEMO_WINDOWS IMGUI_DISABLE_DEBUG_TOOLS IMGUI_ENABLE_FREETYPE)
+target_link_libraries(zg_imgui PUBLIC freetype)
+if(APPLE)
+    target_compile_definitions(zg_imgui PRIVATE IMGUI_ENABLE_OSX_DEFAULT_CLIPBOARD_FUNCTIONS)
+    target_link_libraries(zg_imgui PUBLIC "-framework ApplicationServices")
+elseif(WIN32)
+    target_link_libraries(zg_imgui PUBLIC user32 imm32)
+endif()
+set_target_properties(zg_imgui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(zg_imgui PRIVATE -fvisibility=hidden -w)
+endif()
+
+# the window's contents, X-Plane-free (tools/settings_preview renders them off-screen too)
+add_library(zg_ui STATIC src/gui/font_metrics.cpp src/gui/kit.cpp src/gui/settings_view.cpp)
+target_link_libraries(zg_ui PUBLIC zoal_grass_core zg_imgui)
+set_target_properties(zg_ui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(zg_ui PRIVATE -fvisibility=hidden)
+endif()
+
+add_library(zoal-grass MODULE src/plugin.cpp src/manager.cpp src/gui/imgui_window.cpp src/gui/settings_window.cpp)
+target_link_libraries(zoal-grass PRIVATE zg_ui zoal_grass_core zg_imgui)
 target_include_directories(zoal-grass PRIVATE "${XPLANE_SDK_ROOT}/CHeaders/XPLM")
 target_compile_definitions(zoal-grass PRIVATE
-    XPLM200=1 XPLM210=1 XPLM300=1 XPLM301=1 XPLM303=1 XPLM400=1 XPLM410=1
+    XPLM200=1 XPLM210=1 XPLM300=1 XPLM301=1 XPLM302=1 XPLM303=1 XPLM400=1 XPLM410=1 XPLM420=1 XPLM430=1 XPLM440=1
     ZOAL_GRASS_VERSION="${ZOAL_GRASS_VERSION}")
 if(NOT MSVC)
     target_compile_options(zoal-grass PRIVATE -fvisibility=hidden)
@@ -130,6 +183,13 @@ else()
     target_compile_definitions(zoal-grass PRIVATE APL=0 IBM=0 LIN=1)
 endif()
 
+# tools/settings_preview renders the settings window to a .ppm without X-Plane
+option(ZOAL_GRASS_BUILD_PREVIEW "Build tools/settings_preview" OFF)
+if(ZOAL_GRASS_BUILD_PREVIEW)
+    add_executable(settings_preview tools/settings_preview.cpp)
+    target_link_libraries(settings_preview PRIVATE zg_ui)
+endif()
+
 # ---------------------------------------------------------------- tests
 if(ZOAL_GRASS_BUILD_TESTS)
     enable_testing()
@@ -153,6 +213,9 @@ add_custom_target(install_xplane
             "${XPLANE_ROOT}/Resources/plugins/zoal-grass/resources"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/licenses"
             "${XPLANE_ROOT}/Resources/plugins/zoal-grass/licenses"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${XPLANE_ROOT}/Resources/plugins/zoal-grass/fonts"
+    COMMAND ${CMAKE_COMMAND} -E copy "${ZOAL_GRASS_INTER}/Inter-Regular.ttf" "${ZOAL_GRASS_INTER}/Inter-SemiBold.ttf"
+            "${ZOAL_GRASS_INTER}/Inter-Bold.ttf" "${XPLANE_ROOT}/Resources/plugins/zoal-grass/fonts"
     DEPENDS zoal-grass
     COMMENT "Installing into ${XPLANE_ROOT}/Resources/plugins/zoal-grass")
 
